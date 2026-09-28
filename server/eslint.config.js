@@ -19,11 +19,20 @@ export default [
       },
 
       rules: {
-         'no-unused-vars': 'error',
+         'no-unused-vars': ['error', { ignoreRestSiblings: true }],
          // 'no-console': 'warn',
          'no-undef': 'error',
          eqeqeq: 'error',
          curly: 'error',
+      },
+   },
+
+   {
+      files: ['src/__tests__/**/*.js'],
+      languageOptions: {
+         globals: {
+            ...globals.jest,
+         },
       },
    },
 ];

@@ -9,6 +9,7 @@ if (!databaseUrl) {
    throw new Error('DATABASE_URL is required to connect to the database.');
 }
 
-const client = postgres(databaseUrl);
+// Disable prepared statements for Supabase connection poolers
+const client = postgres(databaseUrl, { prepare: false });
 
-export const db = drizzle(client, { schema });
+export const db = drizzle({ client, schema });

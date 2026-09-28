@@ -7,7 +7,7 @@
       "dev": "nodemon src/server.js",
       "start": "node src/server.js",
       "lint": "eslint .",
-      "test": "jest --passWithNoTests",
+      "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests",
       "format": "prettier --write .",
       "format:check": "prettier --check ."
    },
