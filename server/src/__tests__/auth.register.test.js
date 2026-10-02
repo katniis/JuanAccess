@@ -3,8 +3,7 @@ import {
    readJson,
    getCookie,
    resetMocks,
-   mockSelectQueue,
-   mockTxReturnQueue,
+   mockQueryQueue,
    postJson,
 } from './helpers.js';
 
@@ -120,7 +119,7 @@ describe('POST /auth/register', () => {
    });
 
    it('returns 409 when the email is already registered', async () => {
-      mockSelectQueue.push([{ id: 9, email: 'new@example.com' }]);
+      mockQueryQueue.push([{ id: 9, email: 'new@example.com' }]);
 
       const res = await postJson(ctx.baseUrl, '/auth/register', validBody);
 
@@ -131,8 +130,7 @@ describe('POST /auth/register', () => {
    });
 
    it('returns 201 with the created user and patient and sets a token cookie', async () => {
-      mockSelectQueue.push([]);
-      mockTxReturnQueue.push([{ id: 101 }], [createdUser]);
+      mockQueryQueue.push([], [{ id: 101 }], [createdUser]);
 
       const res = await postJson(ctx.baseUrl, '/auth/register', validBody);
 

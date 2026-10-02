@@ -5,29 +5,58 @@ process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.DATABASE_URL ??= 'postgres://localhost:5432/test_db';
 process.env.NODE_ENV = 'test';
 
-export const mockSelectQueue = [];
-export const mockTxReturnQueue = [];
+export const mockQueryQueue = [];
 
 jest.unstable_mockModule('../db/index.js', () => {
-   const selectQuery = () => ({
-      from: () => ({
-         where: () => ({
-            limit: async () => mockSelectQueue.shift() ?? [],
-         }),
-      }),
-   });
+   const take = () => mockQueryQueue.shift() ?? [];
+
+   const make = (value) => {
+      const node = {
+         from: () => make(value),
+         where: () => make(value),
+         limit: () => make(value),
+         orderBy: () => make(value),
+         innerJoin: () => make(value),
+         leftJoin: () => make(value),
+         values: () => make(value),
+         returning: () => make(value),
+         set: () => make(value),
+      };
+
+      node.then = (onFulfilled, onRejected) =>
+         (value instanceof Error
+            ? Promise.reject(value)
+            : Promise.resolve(value)
+         ).then(onFulfilled, onRejected);
+      node.catch = (onRejected) => node.then(undefined, onRejected);
+      node.finally = (onFinally) =>
+         node.then(
+            (result) => {
+               onFinally();
+               return result;
+            },
+            (error) => {
+               onFinally();
+               throw error;
+            },
+         );
+
+      return node;
+   };
 
    const tx = {
-      insert: () => ({
-         values: () => ({
-            returning: async () => mockTxReturnQueue.shift() ?? [{}],
-         }),
-      }),
+      select: () => make(take()),
+      insert: () => make(take()),
+      update: () => make(take()),
+      delete: () => make(take()),
    };
 
    return {
       db: {
-         select: selectQuery,
+         select: () => make(take()),
+         insert: () => make(take()),
+         update: () => make(take()),
+         delete: () => make(take()),
          transaction: async (fn) => fn(tx),
       },
    };
@@ -67,8 +96,7 @@ export const getCookie = (res, name) => {
 };
 
 export const resetMocks = () => {
-   mockSelectQueue.length = 0;
-   mockTxReturnQueue.length = 0;
+   mockQueryQueue.length = 0;
 };
 
 export const postJson = (baseUrl, path, body, headers = {}) =>

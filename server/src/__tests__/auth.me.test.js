@@ -3,7 +3,7 @@ import {
    startServer,
    readJson,
    resetMocks,
-   mockSelectQueue,
+   mockQueryQueue,
 } from './helpers.js';
 
 const secret = process.env.JWT_SECRET;
@@ -67,7 +67,7 @@ describe('GET /auth/me', () => {
 
    it('returns 401 when the user no longer exists', async () => {
       const token = jwt.sign({ id: 42 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([]);
+      mockQueryQueue.push([]);
 
       const res = await fetch(`${ctx.baseUrl}/auth/me`, {
          headers: { cookie: `token=${token}` },
@@ -81,7 +81,7 @@ describe('GET /auth/me', () => {
 
    it('returns 200 with the current user', async () => {
       const token = jwt.sign({ id: 7 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([staffUser]);
+      mockQueryQueue.push([staffUser]);
 
       const res = await fetch(`${ctx.baseUrl}/auth/me`, {
          headers: { cookie: `token=${token}` },
