@@ -4,9 +4,17 @@ import cookieParser from 'cookie-parser';
 
 import authRoute from './routes/auth.route.js';
 import appointmentRoute from './routes/appointment.route.js';
+import waitlistRoute from './routes/waitlist.route.js';
+
+process.env.TZ = process.env.CLINIC_TIME_ZONE || 'Asia/Manila';
 
 const app = express();
-app.use(cors());
+app.use(
+   cors({
+      origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+      credentials: true,
+   }),
+);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -26,8 +34,8 @@ app.use((req, res, next) => {
 });
 
 app.use('/auth', authRoute);
-
 app.use('/appointment', appointmentRoute);
+app.use('/waitlist', waitlistRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });

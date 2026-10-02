@@ -1,0 +1,2 @@
+CREATE INDEX "waitlist_entries_status_created_at_idx" ON "waitlist_entries" ("status","created_at");--> statement-breakpoint
+CREATE INDEX "waitlist_entries_offer_expiry_idx" ON "waitlist_entries" ("status","offer_expires_at");
