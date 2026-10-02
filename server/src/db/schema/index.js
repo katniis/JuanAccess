@@ -4,3 +4,4 @@ export { providers } from './providers.js';
 export { rooms } from './rooms.js';
 export { users } from './users.js';
 export { visitTypes } from './visitTypes.js';
+export { appointments } from './appointments.js';
