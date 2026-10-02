@@ -7,7 +7,9 @@ import {
    providers,
    rooms,
    visitTypes,
+   waitlistEntries,
 } from '../db/schema/index.js';
+import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -456,25 +458,71 @@ export const cancelAppointment = async (req, res) => {
       return res.status(400).json({ error: 'Invalid appointment ID' });
    }
    try {
-      const conditions = [
-         eq(appointments.id, id),
-         eq(appointments.status, 'scheduled'),
-      ];
-      if (req.user?.role === 'patient') {
-         conditions.push(eq(appointments.patientId, req.user.patientId));
-      }
-      const [updated] = await db
-         .update(appointments)
-         .set({ status: 'cancelled', updatedAt: new Date() })
-         .where(and(...conditions))
-         .returning({ id: appointments.id });
-      if (!updated) {
+      const cancelled = await db.transaction(
+         async (tx) => {
+            const conditions = [
+               eq(appointments.id, id),
+               eq(appointments.status, 'scheduled'),
+            ];
+            if (req.user?.role === 'patient') {
+               conditions.push(eq(appointments.patientId, req.user.patientId));
+            }
+            const [appointment] = await tx
+               .select()
+               .from(appointments)
+               .where(and(...conditions))
+               .limit(1);
+            if (!appointment) {
+               return false;
+            }
+            const [updated] = await tx
+               .update(appointments)
+               .set({ status: 'cancelled', updatedAt: new Date() })
+               .where(
+                  and(
+                     eq(appointments.id, id),
+                     eq(appointments.status, 'scheduled'),
+                  ),
+               )
+               .returning({ id: appointments.id });
+            if (!updated) {
+               return false;
+            }
+
+            const [waitlistOffer] = await tx
+               .select({ id: waitlistEntries.id })
+               .from(waitlistEntries)
+               .where(
+                  and(
+                     eq(waitlistEntries.offeredAppointmentId, id),
+                     eq(waitlistEntries.status, 'offered'),
+                  ),
+               )
+               .limit(1);
+            if (waitlistOffer) {
+               await tx
+                  .update(waitlistEntries)
+                  .set({ status: 'cancelled', offerExpiresAt: null })
+                  .where(eq(waitlistEntries.id, waitlistOffer.id));
+            }
+            await offerNextWaitlistEntry(tx, appointment);
+            return true;
+         },
+         { isolationLevel: 'serializable' },
+      );
+
+      if (!cancelled) {
          return res
             .status(404)
             .json({ error: 'Appointment not found or cannot be cancelled' });
       }
       return res.status(204).end();
    } catch (error) {
+      if (error?.code === '40001') {
+         return res.status(409).json({
+            error: 'Appointment changed while it was being cancelled. Please refresh and try again.',
+         });
+      }
       console.error('Failed to cancel appointment:', error);
       return res.status(500).json({ error: 'Failed to cancel appointment' });
    }

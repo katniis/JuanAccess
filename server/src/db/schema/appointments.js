@@ -28,9 +28,13 @@ export const appointments = pgTable(
 
       visitTypeId: integer('visit_type_id').references(() => visitTypes.id),
 
-      scheduledStart: timestamp('scheduled_start').notNull(),
+      scheduledStart: timestamp('scheduled_start', {
+         withTimezone: true,
+      }).notNull(),
 
-      scheduledEnd: timestamp('scheduled_end').notNull(),
+      scheduledEnd: timestamp('scheduled_end', {
+         withTimezone: true,
+      }).notNull(),
 
       status: varchar('status', {
          length: 20,
