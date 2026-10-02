@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 import authRoute from './routes/auth.route.js';
+import appointmentRoute from './routes/appointment.route.js';
 
 const app = express();
 app.use(cors());
@@ -14,7 +15,7 @@ app.use((req, res, next) => {
 
    res.on('finish', () => {
       const method = req.method.padEnd(10);
-      const route = req.originalUrl.padEnd(25);
+      const route = req.originalUrl.padEnd(30);
       const status = res.statusCode.toString().padEnd(10);
       const time = `${Date.now() - start}ms`;
 
@@ -25,6 +26,8 @@ app.use((req, res, next) => {
 });
 
 app.use('/auth', authRoute);
+
+app.use('/appointment', appointmentRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });
