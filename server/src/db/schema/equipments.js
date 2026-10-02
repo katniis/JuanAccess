@@ -1,5 +1,5 @@
 import { integer, pgTable, serial, varchar } from 'drizzle-orm/pg-core';
-import { patients } from './patients.js';
+import { rooms } from './rooms.js';
 
 export const equipment = pgTable('equipment', {
    id: serial('id').primaryKey(),
@@ -12,5 +12,5 @@ export const equipment = pgTable('equipment', {
       length: 50,
    }),
 
-   roomID: integer('patient_id').references(() => patients.id),
+   roomId: integer('room_id').references(() => rooms.id),
 });
