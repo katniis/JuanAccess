@@ -9,7 +9,9 @@
       "lint": "eslint .",
       "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests",
       "format": "prettier --write .",
-      "format:check": "prettier --check ."
+      "format:check": "prettier --check .",
+      "generate": "npx drizzle-kit generate",
+      "migrate": "npx drizzle-kit migrate"
    },
    "keywords": [],
    "author": "",

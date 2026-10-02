@@ -23,7 +23,7 @@ export default [
          // 'no-console': 'warn',
          'no-undef': 'error',
          eqeqeq: 'error',
-         curly: 'error',
+         // curly: 'error',
       },
    },
 

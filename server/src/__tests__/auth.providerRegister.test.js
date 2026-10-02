@@ -4,8 +4,7 @@ import {
    readJson,
    getCookie,
    resetMocks,
-   mockSelectQueue,
-   mockTxReturnQueue,
+   mockQueryQueue,
    postJson,
 } from './helpers.js';
 
@@ -119,7 +118,7 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 401 when the user no longer exists', async () => {
       const token = jwt.sign({ id: 42 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([]);
+      mockQueryQueue.push([]);
 
       const res = await postJson(
          ctx.baseUrl,
@@ -136,7 +135,7 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 403 when the user is a patient', async () => {
       const token = jwt.sign({ id: 6 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([patientUser]);
+      mockQueryQueue.push([patientUser]);
 
       const res = await postJson(
          ctx.baseUrl,
@@ -153,7 +152,7 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 403 when the user is staff but not staff_admin', async () => {
       const token = jwt.sign({ id: 7 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([staffUser]);
+      mockQueryQueue.push([staffUser]);
 
       const res = await postJson(
          ctx.baseUrl,
@@ -170,7 +169,7 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 400 when required fields are missing', async () => {
       const token = jwt.sign({ id: 5 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([staffAdmin]);
+      mockQueryQueue.push([staffAdmin]);
       const { first_name, ...withoutFirstName } = validBody;
 
       const res = await postJson(
@@ -188,7 +187,7 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 409 when the email is already registered', async () => {
       const token = jwt.sign({ id: 5 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([staffAdmin], [{ id: 9, email: 'doc@example.com' }]);
+      mockQueryQueue.push([staffAdmin], [{ id: 9, email: 'doc@example.com' }]);
 
       const res = await postJson(
          ctx.baseUrl,
@@ -205,8 +204,8 @@ describe('POST /auth/register/provider', () => {
 
    it('returns 201 with the created user and provider and sets a token cookie', async () => {
       const token = jwt.sign({ id: 5 }, secret, { expiresIn: '30d' });
-      mockSelectQueue.push([staffAdmin], []);
-      mockTxReturnQueue.push([{ id: 201 }], [createdUser]);
+      mockQueryQueue.push([staffAdmin], []);
+      mockQueryQueue.push([{ id: 201 }], [createdUser]);
 
       const res = await postJson(
          ctx.baseUrl,

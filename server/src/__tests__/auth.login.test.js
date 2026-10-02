@@ -4,7 +4,7 @@ import {
    readJson,
    getCookie,
    resetMocks,
-   mockSelectQueue,
+   mockQueryQueue,
    postJson,
 } from './helpers.js';
 
@@ -65,7 +65,7 @@ describe('POST /auth/login', () => {
    });
 
    it('returns 401 when the user does not exist', async () => {
-      mockSelectQueue.push([]);
+      mockQueryQueue.push([]);
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'nobody@example.com',
@@ -77,7 +77,7 @@ describe('POST /auth/login', () => {
    });
 
    it('returns 401 when the password is wrong', async () => {
-      mockSelectQueue.push([userRow]);
+      mockQueryQueue.push([userRow]);
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'patient@example.com',
@@ -89,7 +89,7 @@ describe('POST /auth/login', () => {
    });
 
    it('returns 200 with the safe user and sets a token cookie', async () => {
-      mockSelectQueue.push([userRow]);
+      mockQueryQueue.push([userRow]);
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'patient@example.com',
