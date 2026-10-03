@@ -13,6 +13,7 @@ const transitions = {
    denied: ['appealed'],
    appealed: ['submitted', 'approved', 'denied'],
 };
+const validNextStatuses = new Set(Object.values(transitions).flat());
 
 export const getMyPriorAuthorizationStatuses = async (req, res) => {
    if (!requirePatient(req, res)) return;
@@ -91,11 +92,9 @@ export const savePriorAuthRule = async (req, res) => {
          (!Number.isInteger(insurancePlanId) || insurancePlanId < 1)) ||
       typeof requiresPriorAuth !== 'boolean'
    ) {
-      return res
-         .status(400)
-         .json({
-            error: 'visit_type_id, optional insurance_plan_id, and boolean requires_prior_auth are required',
-         });
+      return res.status(400).json({
+         error: 'visit_type_id, optional insurance_plan_id, and boolean requires_prior_auth are required',
+      });
    }
    try {
       const [visitType] = await db
@@ -190,7 +189,7 @@ export const updatePriorAuthorizationStatus = async (req, res) => {
    if (!Number.isInteger(authorizationId) || authorizationId < 1) {
       return res.status(400).json({ error: 'Invalid prior authorization ID' });
    }
-   if (!Object.hasOwn(transitions, status)) {
+   if (!validNextStatuses.has(status)) {
       return res
          .status(400)
          .json({ error: 'Invalid prior authorization status' });
@@ -206,11 +205,9 @@ export const updatePriorAuthorizationStatus = async (req, res) => {
             .status(404)
             .json({ error: 'Prior authorization not found' });
       if (!transitions[record.status]?.includes(status)) {
-         return res
-            .status(409)
-            .json({
-               error: `Cannot change status from ${record.status} to ${status}`,
-            });
+         return res.status(409).json({
+            error: `Cannot change status from ${record.status} to ${status}`,
+         });
       }
       if (status === 'submitted' && req.user.role !== 'staff_admin') {
          return res
@@ -221,11 +218,9 @@ export const updatePriorAuthorizationStatus = async (req, res) => {
          ['approved', 'denied', 'appealed'].includes(status) &&
          req.user.role !== 'staff_admin'
       ) {
-         return res
-            .status(403)
-            .json({
-               error: 'Staff administrator access required for this status change',
-            });
+         return res.status(403).json({
+            error: 'Staff administrator access required for this status change',
+         });
       }
       const [updated] = await db
          .update(priorAuthorizations)
@@ -242,11 +237,9 @@ export const updatePriorAuthorizationStatus = async (req, res) => {
             updatedAt: priorAuthorizations.updatedAt,
          });
       if (!updated)
-         return res
-            .status(409)
-            .json({
-               error: 'Prior authorization status changed; refresh and try again',
-            });
+         return res.status(409).json({
+            error: 'Prior authorization status changed; refresh and try again',
+         });
       return res.json({ priorAuthorization: updated });
    } catch (error) {
       console.error('Failed to update prior authorization status:', error);

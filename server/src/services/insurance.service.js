@@ -36,14 +36,14 @@ export async function getCoverageStatusForAppointment(
       .from(patientCoverage)
       .where(eq(patientCoverage.patientId, patientId))
       .orderBy(desc(patientCoverage.createdAt));
-   const effective = coverages.find(
+   const effective = coverages.filter(
       (coverage) =>
-         coverage.status === 'active' &&
          (!coverage.coverageStart || coverage.coverageStart <= date) &&
          (!coverage.coverageEnd || coverage.coverageEnd >= date),
    );
-   if (effective) return 'active';
-   if (coverages.some((coverage) => coverage.status === 'unverified'))
+   if (effective.some((coverage) => coverage.status === 'active'))
+      return 'active';
+   if (effective.some((coverage) => coverage.status === 'unverified'))
       return 'unverified';
    return coverages.length ? 'inactive' : 'unverified';
 }
