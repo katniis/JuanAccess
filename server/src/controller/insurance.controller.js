@@ -44,11 +44,9 @@ export const addMyCoverage = async (req, res) => {
    if (!requirePatient(req, res)) return;
    const data = parseCoverage(req.body);
    if (!data)
-      return res
-         .status(400)
-         .json({
-            error: 'Valid insurer, plan, policy number, and coverage dates are required',
-         });
+      return res.status(400).json({
+         error: 'Valid insurer, plan, policy number, and coverage dates are required',
+      });
    try {
       const coverage = await db.transaction(async (tx) => {
          const insurancePlanId = await findOrCreateInsurancePlan(
