@@ -5,12 +5,14 @@ import {
    equipment,
    providerAvailability,
    providers,
+   priorAuthorizations,
    rooms,
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
+import { createPriorAuthorizationForAppointment } from '../services/prior-auth.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -405,7 +407,9 @@ export const createAppointment = async (req, res) => {
                   insuranceStatus,
                })
                .returning();
-            return { appointment: created };
+            const priorAuthorization =
+               await createPriorAuthorizationForAppointment(tx, created);
+            return { appointment: created, priorAuthorization };
          },
          { isolationLevel: 'serializable' },
       );
@@ -413,7 +417,10 @@ export const createAppointment = async (req, res) => {
       if (result.error) {
          return res.status(result.status).json({ error: result.error });
       }
-      return res.status(201).json(result.appointment);
+      return res.status(201).json({
+         ...result.appointment,
+         priorAuthorizationStatus: result.priorAuthorization?.status ?? null,
+      });
    } catch (error) {
       if (error?.code === '40001') {
          return res
@@ -444,6 +451,7 @@ export const getMyAppointments = async (req, res) => {
             scheduledEnd: appointments.scheduledEnd,
             status: appointments.status,
             insuranceStatus: appointments.insuranceStatus,
+            priorAuthorizationStatus: priorAuthorizations.status,
             providerFirst: providers.firstName,
             providerLast: providers.lastName,
             visitTypeName: visitTypes.name,
@@ -451,6 +459,10 @@ export const getMyAppointments = async (req, res) => {
          .from(appointments)
          .innerJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
+         .leftJoin(
+            priorAuthorizations,
+            eq(priorAuthorizations.appointmentId, appointments.id),
+         )
          .where(eq(appointments.patientId, req.user.patientId))
          .orderBy(desc(appointments.scheduledStart));
       return res.json(rows);
