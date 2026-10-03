@@ -20,6 +20,7 @@ jest.unstable_mockModule('../db/index.js', () => {
          leftJoin: () => make(value),
          values: () => make(value),
          returning: () => make(value),
+         onConflictDoNothing: () => make(value),
          set: () => make(value),
       };
 

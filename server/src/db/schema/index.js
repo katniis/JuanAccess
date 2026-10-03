@@ -8,3 +8,7 @@ export { visitTypes } from './visitTypes.js';
 export { appointments } from './appointments.js';
 export { waitlistEntries } from './waitlistEntries.js';
 export { notifications } from './notifications.js';
+export { insurancePlans } from './insurancePlans.js';
+export { patientCoverage } from './patientCoverage.js';
+export { priorAuthRules } from './priorAuthRules.js';
+export { priorAuthorizations } from './priorAuthorizations.js';

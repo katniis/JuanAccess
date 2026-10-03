@@ -395,6 +395,7 @@ describe('appointment routes', () => {
             scheduledStart: start.toISOString(),
             scheduledEnd: end.toISOString(),
             status: 'scheduled',
+            insuranceStatus: 'unverified',
          };
          mockQueryQueue.push(
             [patientUser],
@@ -404,7 +405,11 @@ describe('appointment routes', () => {
             [{ id: 5 }],
             [],
             [],
+            [],
             [created],
+            [],
+            [],
+            [{ id: 101, status: 'not_required' }],
          );
 
          const res = await postJson(
@@ -420,7 +425,10 @@ describe('appointment routes', () => {
          );
 
          expect(res.status).toBe(201);
-         expect(await readJson(res)).toEqual(created);
+         expect(await readJson(res)).toEqual({
+            ...created,
+            priorAuthorizationStatus: 'not_required',
+         });
       });
    });
 

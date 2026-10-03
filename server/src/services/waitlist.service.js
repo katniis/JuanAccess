@@ -8,6 +8,8 @@ import {
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
+import { getCoverageStatusForAppointment } from './insurance.service.js';
+import { createPriorAuthorizationForAppointment } from './prior-auth.service.js';
 
 export const WAITLIST_OFFER_MINUTES = 30;
 
@@ -107,6 +109,11 @@ export async function offerNextWaitlistEntry(tx, freedAppointment) {
          continue;
       }
 
+      const insuranceStatus = await getCoverageStatusForAppointment(
+         tx,
+         entry.patientId,
+         slotStart,
+      );
       const [appointment] = await tx
          .insert(appointments)
          .values({
@@ -117,8 +124,10 @@ export async function offerNextWaitlistEntry(tx, freedAppointment) {
             visitTypeId: entry.visitTypeId,
             scheduledStart: slotStart,
             scheduledEnd: slotEnd,
+            insuranceStatus,
          })
          .returning();
+      await createPriorAuthorizationForAppointment(tx, appointment);
       const offerExpiresAt = new Date(
          Date.now() + WAITLIST_OFFER_MINUTES * 60000,
       );
