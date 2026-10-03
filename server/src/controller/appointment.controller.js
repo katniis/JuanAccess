@@ -10,6 +10,7 @@ import {
    waitlistEntries,
 } from '../db/schema/index.js';
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
+import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -385,6 +386,12 @@ export const createAppointment = async (req, res) => {
                };
             }
 
+            const insuranceStatus = await getCoverageStatusForAppointment(
+               tx,
+               req.user.patientId,
+               startDate,
+            );
+
             const [created] = await tx
                .insert(appointments)
                .values({
@@ -395,6 +402,7 @@ export const createAppointment = async (req, res) => {
                   visitTypeId: Number(visitTypeId),
                   scheduledStart: startDate,
                   scheduledEnd: endDate,
+                  insuranceStatus,
                })
                .returning();
             return { appointment: created };

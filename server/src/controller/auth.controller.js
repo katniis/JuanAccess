@@ -5,6 +5,8 @@ import { db } from '../db/index.js';
 import { patients } from '../db/schema/patients.js';
 import { providers } from '../db/schema/providers.js';
 import { users } from '../db/schema/users.js';
+import { patientCoverage } from '../db/schema/patientCoverage.js';
+import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
 
 const cookieOptions = {
    httpOnly: true,
@@ -55,10 +57,39 @@ export const patientRegister = async (req, res) => {
          gender,
          contact_phone: contactPhone,
          address,
+         insurer_name: insurerName,
+         plan_name: planName,
+         policy_number: policyNumber,
+         member_id: memberId,
+         coverage_start: coverageStart,
+         coverage_end: coverageEnd,
       } = req.body ?? {};
 
       if (!email || !password || !firstName || !lastName || !dateOfBirth) {
          return res.status(400).json({ message: 'Missing required fields.' });
+      }
+
+      const hasInsurance = [
+         insurerName,
+         planName,
+         policyNumber,
+         memberId,
+         coverageStart,
+         coverageEnd,
+      ].some(Boolean);
+      if (
+         hasInsurance &&
+         (!validText(insurerName, 150) ||
+            !validText(planName, 150) ||
+            !validText(policyNumber, 100) ||
+            (memberId && !validText(memberId, 100)) ||
+            (coverageStart && !isValidDate(coverageStart)) ||
+            (coverageEnd && !isValidDate(coverageEnd)) ||
+            (coverageStart && coverageEnd && coverageStart > coverageEnd))
+      ) {
+         return res
+            .status(400)
+            .json({ message: 'Invalid insurance information.' });
       }
 
       if (await findUserByEmail(email)) {
@@ -81,6 +112,22 @@ export const patientRegister = async (req, res) => {
                address,
             })
             .returning({ id: patients.id });
+
+         if (hasInsurance) {
+            const insurancePlanId = await findOrCreateInsurancePlan(
+               tx,
+               insurerName.trim(),
+               planName.trim(),
+            );
+            await tx.insert(patientCoverage).values({
+               patientId: patient.id,
+               insurancePlanId,
+               policyNumber: policyNumber.trim(),
+               memberId: memberId?.trim() || null,
+               coverageStart: coverageStart || null,
+               coverageEnd: coverageEnd || null,
+            });
+         }
 
          const [user] = await tx
             .insert(users)
@@ -114,6 +161,23 @@ export const patientRegister = async (req, res) => {
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };
+
+function validText(value, maxLength) {
+   return (
+      typeof value === 'string' &&
+      value.trim().length > 0 &&
+      value.trim().length <= maxLength
+   );
+}
+
+function isValidDate(value) {
+   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+      return false;
+   const date = new Date(`${value}T00:00:00.000Z`);
+   return (
+      !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+   );
+}
 
 export const providerRegister = async (req, res) => {
    try {

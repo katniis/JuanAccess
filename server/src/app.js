@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import authRoute from './routes/auth.route.js';
 import appointmentRoute from './routes/appointment.route.js';
 import waitlistRoute from './routes/waitlist.route.js';
+import insuranceRoute from './routes/insurance.route.js';
 
 process.env.TZ = process.env.CLINIC_TIME_ZONE || 'Asia/Manila';
 
@@ -36,6 +37,7 @@ app.use((req, res, next) => {
 app.use('/auth', authRoute);
 app.use('/appointment', appointmentRoute);
 app.use('/waitlist', waitlistRoute);
+app.use('/insurance', insuranceRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });
