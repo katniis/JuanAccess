@@ -5,16 +5,16 @@ import { patientCoverage } from '../db/schema/patientCoverage.js';
 export async function findOrCreateInsurancePlan(tx, insurerName, planName) {
    await tx
       .insert(insurancePlans)
-      .values({ insurerName, planName })
+      .values({ payerName: insurerName, planName })
       .onConflictDoNothing({
-         target: [insurancePlans.insurerName, insurancePlans.planName],
+         target: [insurancePlans.payerName, insurancePlans.planName],
       });
    const [plan] = await tx
       .select({ id: insurancePlans.id })
       .from(insurancePlans)
       .where(
          and(
-            eq(insurancePlans.insurerName, insurerName),
+            eq(insurancePlans.payerName, insurerName),
             eq(insurancePlans.planName, planName),
          ),
       )

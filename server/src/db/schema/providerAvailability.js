@@ -15,7 +15,9 @@ export const providerAvailability = pgTable(
    {
       id: serial('id').primaryKey(),
 
-      providerId: integer('provider_id').references(() => providers.id),
+      providerId: integer('provider_id')
+         .notNull()
+         .references(() => providers.id),
 
       dayOfWeek: smallint('day_of_week').notNull(),
 

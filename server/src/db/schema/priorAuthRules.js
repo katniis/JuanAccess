@@ -20,7 +20,9 @@ export const priorAuthRules = pgTable(
       insurancePlanId: integer('insurance_plan_id').references(
          () => insurancePlans.id,
       ),
-      requiresPriorAuth: boolean('requires_prior_auth').notNull(),
+      requiresPriorAuth: boolean('requires_prior_auth')
+         .notNull()
+         .default(false),
    },
    (table) => [
       index('prior_auth_rules_visit_plan_idx').on(

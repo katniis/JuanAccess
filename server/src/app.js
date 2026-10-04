@@ -7,6 +7,7 @@ import appointmentRoute from './routes/appointment.route.js';
 import waitlistRoute from './routes/waitlist.route.js';
 import insuranceRoute from './routes/insurance.route.js';
 import priorAuthRoute from './routes/prior-auth.route.js';
+import staffRoute from './routes/staff.route.js';
 
 process.env.TZ = process.env.CLINIC_TIME_ZONE || 'Asia/Manila';
 
@@ -40,6 +41,7 @@ app.use('/appointment', appointmentRoute);
 app.use('/waitlist', waitlistRoute);
 app.use('/insurance', insuranceRoute);
 app.use('/prior-auth', priorAuthRoute);
+app.use('/staff', staffRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });
