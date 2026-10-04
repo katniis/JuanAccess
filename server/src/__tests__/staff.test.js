@@ -48,9 +48,6 @@ describe('Staff Backend Routes & Controller', () => {
    });
    beforeEach(resetMocks);
 
-   // ==========================================
-   // 1. Role Guards & Authentication
-   // ==========================================
    describe('Authentication & Role Guards', () => {
       it('blocks unauthenticated requests to staff routes', async () => {
          const res = await fetch(`${ctx.baseUrl}/staff/dashboard`);
@@ -82,9 +79,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 2. Dashboard
-   // ==========================================
    describe('Staff Dashboard', () => {
       it('returns daily snapshot counts and appointments list', async () => {
          mockQueryQueue.push(
@@ -116,9 +110,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 3. Doctors & Schedules
-   // ==========================================
    describe('Doctor Search & Schedule', () => {
       it('lists doctors with weekly availability', async () => {
          const doctors = [
@@ -172,9 +163,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 4. Patient Search & Pre-Visit Clinical Data
-   // ==========================================
    describe('Patient Search & Pre-Visit Clinical Data', () => {
       it('searches patients by name or ID', async () => {
          const patientsList = [{ id: 10, firstName: 'Bob', lastName: 'Smith' }];
@@ -263,9 +251,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 5. Slots, Utilization & Cancellation
-   // ==========================================
    describe('Slot Management & Utilization', () => {
       it('fetches resource utilization summary', async () => {
          const roomsList = [{ id: 1, name: 'Exam 1', roomType: 'exam' }];
@@ -363,9 +348,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 6. Prior Authorization Queue
-   // ==========================================
    describe('Prior Authorization Queue', () => {
       it('fetches prior authorization queue items', async () => {
          const items = [
@@ -462,9 +444,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 7. Appeals Queue
-   // ==========================================
    describe('Appeals Queue Workflow', () => {
       it('creates appeal for denied prior authorization', async () => {
          const priorAuth = {
@@ -598,9 +577,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 8. Clinical Guidelines
-   // ==========================================
    describe('Clinical Guidelines', () => {
       it('lists clinical guidelines', async () => {
          const guidelines = [
@@ -648,9 +624,6 @@ describe('Staff Backend Routes & Controller', () => {
       });
    });
 
-   // ==========================================
-   // 9. New Patient Insurance Verification
-   // ==========================================
    describe('New Patient Insurance Verification', () => {
       it('lists unverified patient coverages', async () => {
          const unverified = [

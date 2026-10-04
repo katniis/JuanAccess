@@ -28,10 +28,6 @@ import {
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 import { manilaDateBounds } from '../utils/timezone.js';
 
-// ==========================================
-// 1. DASHBOARD & LOOKUPS
-// ==========================================
-
 export const getDashboard = async (req, res) => {
    try {
       const data = await getStaffDashboardSnapshot();
@@ -131,10 +127,6 @@ export const getAppointmentPreVisitData = async (req, res) => {
          .json({ error: 'Failed to fetch pre-visit clinical data' });
    }
 };
-
-// ==========================================
-// 2. SLOTS & UTILIZATION MANAGEMENT
-// ==========================================
 
 export const getSlotsUtilization = async (req, res) => {
    const date = req.query.date ? new Date(req.query.date) : new Date();
@@ -252,10 +244,6 @@ export const rescheduleAppointmentStaff = async (req, res) => {
          .json({ error: 'Failed to reschedule appointment' });
    }
 };
-
-// ==========================================
-// 3. PRIOR AUTHORIZATION QUEUE
-// ==========================================
 
 export const getPriorAuthQueue = async (req, res) => {
    try {
@@ -636,10 +624,6 @@ export const updatePriorAuthDecision = async (req, res) => {
       return res.status(500).json({ error: 'Failed to update decision' });
    }
 };
-
-// ==========================================
-// 4. APPEALS QUEUE
-// ==========================================
 
 export const getAppealsQueue = async (req, res) => {
    try {
@@ -1124,10 +1108,6 @@ export const updateAppealDecision = async (req, res) => {
    }
 };
 
-// ==========================================
-// 5. CLINICAL GUIDELINES
-// ==========================================
-
 export const getGuidelines = async (req, res) => {
    try {
       const visitTypeId = req.query.visit_type_id
@@ -1209,10 +1189,6 @@ export const createGuideline = async (req, res) => {
          .json({ error: 'Failed to create clinical guideline' });
    }
 };
-
-// ==========================================
-// 6. NEW PATIENT INSURANCE VERIFICATION
-// ==========================================
 
 export const getUnverifiedCoverages = async (req, res) => {
    try {
