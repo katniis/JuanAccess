@@ -27,6 +27,7 @@ export const patientCoverage = pgTable(
       memberId: varchar('member_id', { length: 100 }),
       coverageStart: date('coverage_start'),
       coverageEnd: date('coverage_end'),
+      effectiveDate: date('effective_date'),
       status: varchar('status', { length: 20 }).notNull().default('unverified'),
       verifiedBy: integer('verified_by').references(() => users.id),
       verifiedAt: timestamp('verified_at', { withTimezone: true }),

@@ -16,5 +16,7 @@ export const visitTypes = pgTable('visit_types', {
       length: 100,
    }),
 
-   requiredEquipmentId: integer('equipment_id').references(() => equipment.id),
+   requiredEquipmentId: integer('required_equipment_id').references(
+      () => equipment.id,
+   ),
 });

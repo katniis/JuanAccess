@@ -18,15 +18,23 @@ export const appointments = pgTable(
    {
       id: serial('id').primaryKey(),
 
-      patientId: integer('patient_id').references(() => patients.id),
+      patientId: integer('patient_id')
+         .notNull()
+         .references(() => patients.id),
 
-      providerId: integer('provider_id').references(() => providers.id),
+      providerId: integer('provider_id')
+         .notNull()
+         .references(() => providers.id),
 
-      roomId: integer('room_id').references(() => rooms.id),
+      roomId: integer('room_id')
+         .notNull()
+         .references(() => rooms.id),
 
       equipmentId: integer('equipment_id').references(() => equipment.id),
 
-      visitTypeId: integer('visit_type_id').references(() => visitTypes.id),
+      visitTypeId: integer('visit_type_id')
+         .notNull()
+         .references(() => visitTypes.id),
 
       scheduledStart: timestamp('scheduled_start', {
          withTimezone: true,
@@ -46,9 +54,13 @@ export const appointments = pgTable(
          .notNull()
          .default('unverified'),
 
-      createdAt: timestamp('created_at').notNull().defaultNow(),
+      createdAt: timestamp('created_at', { withTimezone: true })
+         .notNull()
+         .defaultNow(),
 
-      updatedAt: timestamp('updated_at').notNull().defaultNow(),
+      updatedAt: timestamp('updated_at', { withTimezone: true })
+         .notNull()
+         .defaultNow(),
    },
 
    (table) => [
