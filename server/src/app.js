@@ -9,12 +9,12 @@ import insuranceRoute from './routes/insurance.route.js';
 import priorAuthRoute from './routes/prior-auth.route.js';
 import staffRoute from './routes/staff.route.js';
 
-process.env.TZ = process.env.CLINIC_TIME_ZONE || 'Asia/Manila';
+process.env.TZ = process.env.CLINIC_TIME_ZONE;
 
 const app = express();
 app.use(
    cors({
-      origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+      origin: process.env.CLIENT_ORIGIN,
       credentials: true,
    }),
 );
