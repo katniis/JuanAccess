@@ -38,8 +38,9 @@ export async function getCoverageStatusForAppointment(
       .orderBy(desc(patientCoverage.createdAt));
    const effective = coverages.filter(
       (coverage) =>
-         (!coverage.coverageStart || coverage.coverageStart <= date) &&
-         (!coverage.coverageEnd || coverage.coverageEnd >= date),
+         (!coverage.coverageStart ||
+            clinicDate(coverage.coverageStart) <= date) &&
+         (!coverage.coverageEnd || clinicDate(coverage.coverageEnd) >= date),
    );
    if (effective.some((coverage) => coverage.status === 'active'))
       return 'active';

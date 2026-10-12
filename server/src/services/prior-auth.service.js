@@ -16,8 +16,9 @@ export async function createPriorAuthorizationForAppointment(tx, appointment) {
    const appointmentDate = clinicDate(appointment.scheduledStart);
    const applicableCoverage = coverage.find(
       (item) =>
-         (!item.coverageStart || item.coverageStart <= appointmentDate) &&
-         (!item.coverageEnd || item.coverageEnd >= appointmentDate),
+         (!item.coverageStart ||
+            clinicDate(item.coverageStart) <= appointmentDate) &&
+         (!item.coverageEnd || clinicDate(item.coverageEnd) >= appointmentDate),
    );
    const planId = applicableCoverage?.planId ?? null;
    const rules = await tx
