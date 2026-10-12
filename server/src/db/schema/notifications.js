@@ -20,4 +20,13 @@ export const notifications = pgTable('notifications', {
    createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+   emailStatus: varchar('email_status', { length: 20 })
+      .notNull()
+      .default('pending'),
+   emailAttempts: integer('email_attempts').notNull().default(0),
+   emailNextAttemptAt: timestamp('email_next_attempt_at', {
+      withTimezone: true,
+   }),
+   emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+   emailLastError: varchar('email_last_error', { length: 500 }),
 });

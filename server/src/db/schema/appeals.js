@@ -39,7 +39,7 @@ export const appeals = pgTable(
    (table) => [
       check(
          'appeals_status_check',
-         sql`${table.status} IN ('drafted', 'submitted', 'approved', 'denied')`,
+         sql`${table.status} IN ('drafted', 'submitted', 'manual_review', 'approved', 'denied')`,
       ),
    ],
 );

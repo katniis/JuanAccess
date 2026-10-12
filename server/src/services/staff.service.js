@@ -24,6 +24,7 @@ import {
    medications,
    patientCoverage,
    patients,
+   preVisitSummaries,
    priorAuthorizations,
    providerAvailability,
    providers,
@@ -32,6 +33,8 @@ import {
    waitlistEntries,
 } from '../db/schema/index.js';
 import { offerNextWaitlistEntry } from './waitlist.service.js';
+import { buildPreVisitPrompt, generateGeminiDraft } from './gemini.service.js';
+import { recordAudit } from './audit.service.js';
 import {
    manilaDateBounds,
    manilaDateString,
@@ -139,8 +142,9 @@ export async function searchDoctors(searchQuery = '') {
       .from(providers);
 
    const trimmed = searchQuery.trim();
+   const filters = [eq(providers.isActive, true)];
    if (trimmed) {
-      query = query.where(
+      filters.push(
          or(
             ilike(providers.firstName, `%${trimmed}%`),
             ilike(providers.lastName, `%${trimmed}%`),
@@ -149,6 +153,7 @@ export async function searchDoctors(searchQuery = '') {
          ),
       );
    }
+   query = query.where(and(...filters));
 
    const doctorList = await query.orderBy(asc(providers.lastName));
 
@@ -428,6 +433,12 @@ export async function getAppointmentPreVisitClinicalData(appointmentId) {
       )
       .orderBy(desc(medications.startDate));
 
+   const [storedSummary] = await db
+      .select()
+      .from(preVisitSummaries)
+      .where(eq(preVisitSummaries.appointmentId, appointmentId))
+      .limit(1);
+
    // Determine if new patient fallback message should be displayed per docs.md:
    // "If a patient has zero prior encounters, skip the AI call entirely and show a simple fallback message:
    // 'New patient — no prior chart history available. Reason for visit: [intake reason/referral note].'"
@@ -441,10 +452,54 @@ export async function getAppointmentPreVisitClinicalData(appointmentId) {
         }.`
       : null;
 
+   const deterministicSummary =
+      fallbackSummary ||
+      `Established patient with ${patientConditions.length} active condition(s), ${patientChartNotes.length} recent encounter(s), ${patientLabs.length} recent lab result(s), and ${patientMedications.length} active medication(s).`;
+   const generated = fallbackSummary
+      ? { text: deterministicSummary, source: 'fallback' }
+      : await generateGeminiDraft({
+           prompt: buildPreVisitPrompt({
+              appointment: appt,
+              conditions: patientConditions,
+              encounters: patientChartNotes,
+              labs: patientLabs,
+              medications: patientMedications,
+           }),
+           fallback: deterministicSummary,
+        });
+   const summaryText = generated.text;
+   const rawDataSnapshot = {
+      conditions: patientConditions,
+      recentEncounters: patientChartNotes,
+      recentLabs: patientLabs,
+      activeMedications: patientMedications,
+   };
+   if (storedSummary) {
+      await db
+         .update(preVisitSummaries)
+         .set({ summaryText, rawDataSnapshot, generatedAt: new Date() })
+         .where(eq(preVisitSummaries.id, storedSummary.id));
+   } else {
+      await db.insert(preVisitSummaries).values({
+         appointmentId,
+         summaryText,
+         rawDataSnapshot,
+      });
+   }
+   void recordAudit({
+      entityType: 'pre_visit_summary',
+      entityId: appointmentId,
+      action:
+         generated.source === 'gemini' ? 'ai_generated' : 'fallback_generated',
+      newValue: { source: generated.source },
+   });
+
    return {
       appointment: appt,
       isFallbackNotice: !hasPriorHistory,
+      aiSource: generated.source,
       fallbackSummary,
+      preVisitSummary: summaryText,
       clinicalData: {
          conditions: patientConditions,
          recentEncounters: patientChartNotes,

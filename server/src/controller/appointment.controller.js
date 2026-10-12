@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import {
    appointments,
    equipment,
+   preVisitSummaries,
    providerAvailability,
    providers,
    priorAuthorizations,
@@ -121,8 +122,13 @@ export const getAvailableSlots = async (req, res) => {
             eq(providerAvailability.providerId, providers.id),
          );
       const eligibleProviders = await (requiredSpecialty
-         ? providerQuery.where(eq(providers.specialty, requiredSpecialty))
-         : providerQuery);
+         ? providerQuery.where(
+              and(
+                 eq(providers.isActive, true),
+                 eq(providers.specialty, requiredSpecialty),
+              ),
+           )
+         : providerQuery.where(eq(providers.isActive, true)));
 
       const busy = await db
          .select({
@@ -261,6 +267,7 @@ export const createAppointment = async (req, res) => {
                .where(
                   and(
                      eq(providers.id, Number(providerId)),
+                     eq(providers.isActive, true),
                      requiredSpecialty
                         ? eq(providers.specialty, requiredSpecialty)
                         : undefined,
@@ -409,6 +416,9 @@ export const createAppointment = async (req, res) => {
                .returning();
             const priorAuthorization =
                await createPriorAuthorizationForAppointment(tx, created);
+            await tx.insert(preVisitSummaries).values({
+               appointmentId: created.id,
+            });
             return { appointment: created, priorAuthorization };
          },
          { isolationLevel: 'serializable' },

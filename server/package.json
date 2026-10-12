@@ -11,7 +11,9 @@
       "format": "prettier --write .",
       "format:check": "prettier --check .",
       "generate": "npx drizzle-kit generate",
-      "migrate": "npx drizzle-kit migrate"
+      "migrate": "npx drizzle-kit migrate",
+      "import:data": "node scripts/import-reference-data.js",
+      "security:check": "node scripts/check-db-security.js"
    },
    "keywords": [],
    "author": "",
@@ -26,6 +28,7 @@
       "express": "^5.2.1",
       "jest": "^30.5.2",
       "jsonwebtoken": "^9.0.3",
+      "nodemailer": "^7.0.13",
       "postgres": "^3.4.9"
    },
    "devDependencies": {

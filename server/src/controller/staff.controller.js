@@ -12,7 +12,7 @@ import {
    providers,
    visitTypes,
 } from '../db/schema/index.js';
-import { mockInsurerService } from '../services/insurer.service.js';
+import { insurerService } from '../services/insurer.service.js';
 import {
    getAppointmentPreVisitClinicalData,
    getDoctorSchedule,
@@ -26,7 +26,15 @@ import {
    staffRescheduleAppointment,
 } from '../services/staff.service.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
+import {
+   listAppointmentProcedures,
+   listDisputes,
+   listFeeSchedule,
+   recordProcedure,
+} from '../services/billing.service.js';
 import { manilaDateBounds } from '../utils/timezone.js';
+import { generateGeminiDraft } from '../services/gemini.service.js';
+import { recordAudit } from '../services/audit.service.js';
 
 export const getDashboard = async (req, res) => {
    try {
@@ -125,6 +133,76 @@ export const getAppointmentPreVisitData = async (req, res) => {
       return res
          .status(500)
          .json({ error: 'Failed to fetch pre-visit clinical data' });
+   }
+};
+
+export const getStaffDisputes = async (_req, res) => {
+   try {
+      return res.status(200).json({ disputes: await listDisputes() });
+   } catch (error) {
+      console.error('Failed to fetch billing disputes:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to fetch billing disputes' });
+   }
+};
+
+export const getStaffFeeSchedule = async (_req, res) => {
+   try {
+      return res.status(200).json({ feeSchedule: await listFeeSchedule() });
+   } catch (error) {
+      console.error('Failed to fetch fee schedule:', error);
+      return res.status(500).json({ error: 'Failed to fetch fee schedule' });
+   }
+};
+
+export const getAppointmentProcedures = async (req, res) => {
+   const appointmentId = Number(req.params.id);
+   if (!Number.isInteger(appointmentId) || appointmentId < 1) {
+      return res.status(400).json({ error: 'Invalid appointment ID' });
+   }
+   try {
+      return res.status(200).json({
+         procedures: await listAppointmentProcedures(appointmentId),
+      });
+   } catch (error) {
+      console.error('Failed to fetch performed procedures:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to fetch performed procedures' });
+   }
+};
+
+export const createAppointmentProcedure = async (req, res) => {
+   const appointmentId = Number(req.params.id);
+   const procedureCode = req.body?.procedure_code;
+   const description = req.body?.description;
+   if (
+      !Number.isInteger(appointmentId) ||
+      appointmentId < 1 ||
+      typeof procedureCode !== 'string' ||
+      !procedureCode.trim() ||
+      typeof description !== 'string' ||
+      !description.trim()
+   ) {
+      return res.status(400).json({
+         error: 'procedure_code and description are required',
+      });
+   }
+   try {
+      const procedure = await recordProcedure(
+         appointmentId,
+         procedureCode.trim(),
+         description.trim(),
+      );
+      return procedure
+         ? res.status(201).json(procedure)
+         : res.status(404).json({ error: 'Appointment not found' });
+   } catch (error) {
+      console.error('Failed to record performed procedure:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to record performed procedure' });
    }
 };
 
@@ -429,8 +507,13 @@ export const draftPriorAuthJustification = async (req, res) => {
       return res.status(400).json({ error: 'Invalid prior authorization ID' });
    }
 
-   if (typeof justificationText !== 'string' || !justificationText.trim()) {
-      return res.status(400).json({ error: 'Justification text is required.' });
+   if (
+      justificationText !== undefined &&
+      typeof justificationText !== 'string'
+   ) {
+      return res
+         .status(400)
+         .json({ error: 'justification_text must be text.' });
    }
 
    try {
@@ -452,6 +535,16 @@ export const draftPriorAuthJustification = async (req, res) => {
          });
       }
 
+      const fallback =
+         justificationText?.trim() ||
+         'Staff review draft: document symptoms, duration, prior conservative treatment, examination findings, and medical necessity for the requested service.';
+      const generated = justificationText?.trim()
+         ? { text: justificationText.trim(), source: 'staff' }
+         : await generateGeminiDraft({
+              prompt: `Draft a concise prior-authorization justification for staff review. Do not invent facts. Prior authorization ID: ${authId}. Appointment ID: ${existing.appointmentId}. Status: ${existing.status}.`,
+              fallback,
+           });
+
       // Transition needs_draft -> drafted, or keep as drafted
       const nextStatus =
          existing.status === 'needs_draft' ? 'drafted' : existing.status;
@@ -459,7 +552,8 @@ export const draftPriorAuthJustification = async (req, res) => {
       const [updated] = await db
          .update(priorAuthorizations)
          .set({
-            justificationText: justificationText.trim(),
+            justificationText: generated.text,
+            aiGeneratedAt: generated.source === 'gemini' ? new Date() : null,
             status: nextStatus,
             reviewedBy: req.user.id,
             updatedBy: req.user.id,
@@ -467,7 +561,6 @@ export const draftPriorAuthJustification = async (req, res) => {
          })
          .where(eq(priorAuthorizations.id, authId))
          .returning();
-
       return res.status(200).json({
          message: 'Prior authorization draft saved successfully',
          priorAuthorization: updated,
@@ -524,7 +617,7 @@ export const submitPriorAuth = async (req, res) => {
       }
 
       // Adjudicate via Mock Insurer
-      const outcome = mockInsurerService.adjudicatePriorAuth({
+      const outcome = insurerService.submitPriorAuthorization({
          priorAuth: record,
          mockOutcome: req.body?.mock_outcome,
       });
@@ -542,6 +635,15 @@ export const submitPriorAuth = async (req, res) => {
          })
          .where(eq(priorAuthorizations.id, authId))
          .returning();
+
+      if (updated)
+         void recordAudit({
+            entityType: 'prior_authorization',
+            entityId: authId,
+            action: 'insurer_submission',
+            changedBy: req.user.id,
+            newValue: { status: outcome.status },
+         });
 
       return res.status(200).json({
          message: `Prior authorization submitted to insurer: outcome is ${outcome.status}`,
@@ -855,6 +957,13 @@ export const createAppeal = async (req, res) => {
 
       const initialChartJustification =
          chartJustificationText || priorAuth.justificationText || '';
+      const generatedAppeal = appealLetterText.trim()
+         ? { text: appealLetterText.trim(), source: 'staff' }
+         : await generateGeminiDraft({
+              prompt: `Draft a concise appeal letter for staff review. Do not invent facts. Prior authorization ID: ${priorAuthId}. Cite the existing clinical justification and any selected guideline without making a coverage decision. Clinical justification: ${initialChartJustification}`,
+              fallback:
+                 'Staff review draft: explain the clinical necessity, supporting documentation, and the reason the prior authorization decision should be reconsidered.',
+           });
 
       const [newAppeal] = await db.transaction(async (tx) => {
          const [created] = await tx
@@ -863,7 +972,7 @@ export const createAppeal = async (req, res) => {
                priorAuthorizationId: priorAuthId,
                guidelineId,
                chartJustificationText: initialChartJustification,
-               appealLetterText: appealLetterText.trim(),
+               appealLetterText: generatedAppeal.text,
                status: 'drafted',
                reviewedBy: req.user.id,
             })
@@ -989,7 +1098,7 @@ export const submitAppeal = async (req, res) => {
       }
 
       // Adjudicate via Mock Insurer
-      const outcome = mockInsurerService.adjudicateAppeal({
+      const outcome = insurerService.submitAppeal({
          appeal: appealRecord,
          mockOutcome: req.body?.mock_outcome,
       });
@@ -1037,6 +1146,14 @@ export const submitAppeal = async (req, res) => {
          return [app];
       });
 
+      if (updated)
+         void recordAudit({
+            entityType: 'appeal',
+            entityId: appealId,
+            action: 'insurer_submission',
+            changedBy: req.user.id,
+            newValue: { status: outcome.status },
+         });
       return res.status(200).json({
          message: `Appeal submitted to insurer: outcome is ${outcome.status}`,
          appeal: updated,

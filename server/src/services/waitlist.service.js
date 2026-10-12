@@ -2,12 +2,13 @@ import { and, asc, eq, gt, gte, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    appointments,
-   notifications,
+   preVisitSummaries,
    providers,
    users,
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
+import { insertNotification } from './notification.service.js';
 import { getCoverageStatusForAppointment } from './insurance.service.js';
 import { createPriorAuthorizationForAppointment } from './prior-auth.service.js';
 
@@ -128,6 +129,9 @@ export async function offerNextWaitlistEntry(tx, freedAppointment) {
          })
          .returning();
       await createPriorAuthorizationForAppointment(tx, appointment);
+      await tx.insert(preVisitSummaries).values({
+         appointmentId: appointment.id,
+      });
       const offerExpiresAt = new Date(
          Date.now() + WAITLIST_OFFER_MINUTES * 60000,
       );
@@ -281,7 +285,7 @@ async function notifyPatient(tx, patientId, type, message) {
       .where(and(eq(users.patientId, patientId), eq(users.role, 'patient')))
       .limit(1);
    if (user) {
-      await tx.insert(notifications).values({ userId: user.id, type, message });
+      await insertNotification(tx, { userId: user.id, type, message });
    }
 }
 

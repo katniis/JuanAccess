@@ -72,3 +72,83 @@ export const mockInsurerService = {
       };
    },
 };
+
+const manualOutcome = (operation) => ({
+   status: 'manual_review',
+   decisionAt: null,
+   denialReason: null,
+   notes: `${operation} requires staff review because no supported insurer endpoint is configured.`,
+});
+
+async function philHealthEligibility(request) {
+   const baseUrl = process.env.PHILHEALTH_BASE_URL?.trim();
+   const username = process.env.PHILHEALTH_USERNAME?.trim();
+   const password = process.env.PHILHEALTH_PASSWORD?.trim();
+   const path = process.env.PHILHEALTH_ELIGIBILITY_PATH?.trim();
+   if (!baseUrl || !username || !password || !path) {
+      return manualOutcome('Eligibility');
+   }
+
+   const controller = new AbortController();
+   const timeout = setTimeout(() => controller.abort(), 10_000);
+   try {
+      const response = await fetch(
+         `${baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`,
+         {
+            method: 'POST',
+            headers: {
+               'content-type': 'application/json',
+               authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+               ...(process.env.PHILHEALTH_ACCOUNT_KEY
+                  ? { 'x-account-key': process.env.PHILHEALTH_ACCOUNT_KEY }
+                  : {}),
+            },
+            body: JSON.stringify(request),
+            signal: controller.signal,
+         },
+      );
+      if (!response.ok) return manualOutcome('Eligibility');
+      const data = await response.json();
+      return {
+         status: data?.eligible === true ? 'approved' : 'denied',
+         decisionAt: new Date(),
+         denialReason:
+            data?.eligible === true
+               ? null
+               : 'PhilHealth eligibility was not confirmed.',
+         response: { eligible: data?.eligible === true },
+      };
+   } catch {
+      return manualOutcome('Eligibility');
+   } finally {
+      clearTimeout(timeout);
+   }
+}
+
+export const insurerService = {
+   async verifyEligibility(request) {
+      if (process.env.INSURER_MODE === 'philhealth')
+         return philHealthEligibility(request);
+      return manualOutcome('Eligibility');
+   },
+
+   submitPriorAuthorization({ mockOutcome } = {}) {
+      if (mockOutcome)
+         return mockInsurerService.adjudicatePriorAuth({ mockOutcome });
+      return manualOutcome('Prior authorization');
+   },
+
+   getPriorAuthorizationStatus() {
+      return manualOutcome('Prior authorization status lookup');
+   },
+
+   submitAppeal({ mockOutcome } = {}) {
+      if (mockOutcome)
+         return mockInsurerService.adjudicateAppeal({ mockOutcome });
+      return manualOutcome('Appeal');
+   },
+
+   getAppealStatus() {
+      return manualOutcome('Appeal status lookup');
+   },
+};

@@ -41,7 +41,7 @@ export const priorAuthorizations = pgTable(
       unique('prior_authorizations_appointment_unique').on(table.appointmentId),
       check(
          'prior_authorizations_status_check',
-         sql`${table.status} IN ('not_required', 'needs_draft', 'drafted', 'submitted', 'approved', 'denied', 'appealed')`,
+         sql`${table.status} IN ('not_required', 'needs_draft', 'drafted', 'submitted', 'manual_review', 'approved', 'denied', 'appealed')`,
       ),
    ],
 );
