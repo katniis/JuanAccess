@@ -1,0 +1,15 @@
+id,name,description,duration_minutes,required_specialty,required_equipment_id
+1,Annual Physical,,30,Internal Medicine,
+2,Follow-up,,15,,
+3,MRI - Knee,,45,Orthopedics,1
+4,New Patient Intake,,45,,
+5,Cardiology Consult,,30,Cardiology,
+6,X-Ray - Chest,,20,,2
+7,Primary Care Consultation,Routine assessment and management of common outpatient conditions,30,Internal Medicine,
+8,ECG - Resting,Resting 12-lead electrocardiogram,20,Cardiology,4
+9,Spirometry,Office lung-function testing,30,Internal Medicine,5
+10,Ultrasound - Abdomen,Diagnostic abdominal ultrasonography,30,Internal Medicine,3
+11,DEXA Scan,Bone mineral density assessment,30,Internal Medicine,6
+12,Laboratory Diagnostics,Outpatient laboratory collection and review,20,Internal Medicine,
+13,Prenatal Consultation,Prenatal care and pregnancy risk review,30,Obstetrics and Gynecology,
+14,Pediatric Consultation,Pediatric primary-care assessment,30,Pediatrics,

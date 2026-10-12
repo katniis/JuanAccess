@@ -1,0 +1,8 @@
+id,name,room_type
+1,Exam Room 1,exam
+2,Exam Room 2,exam
+3,Exam Room 3,exam
+4,Imaging Suite A,imaging
+5,Cardiac Diagnostics,diagnostics
+6,Pulmonary Testing,diagnostics
+7,Bone Density Suite,imaging

@@ -1,0 +1,18 @@
+id,procedure_code,description,standard_cost
+1,99213,Office visit established patient,1200.00
+2,73721,MRI knee without contrast,8500.00
+3,73722,MRI knee with contrast,12000.00
+4,80048,Basic metabolic panel,650.00
+5,80053,Comprehensive metabolic panel,950.00
+6,71046,Chest X-ray,900.00
+7,99395,Annual physical exam,1500.00
+8,93000,Resting electrocardiogram,800.00
+9,94010,Spirometry,1000.00
+10,76700,Complete abdominal ultrasound,2500.00
+11,77080,DEXA bone-density study,2500.00
+12,81001,Urinalysis,250.00
+13,83036,Hemoglobin A1c,600.00
+14,80061,Lipid panel,800.00
+15,85025,Complete blood count,500.00
+16,59425,Prenatal care first package,3500.00
+17,59426,Prenatal care subsequent package,3000.00

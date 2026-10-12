@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    appeals,
@@ -809,10 +809,28 @@ export const createAppeal = async (req, res) => {
          });
       }
 
-      // If guideline_id not provided, match automatically by visit_type_id
+      // If guideline_id is omitted, prefer an exact active diagnosis match.
       if (!guidelineId) {
-         const [matchedGuideline] = await db
-            .select({ id: clinicalGuidelines.id })
+         const patientConditions = await db
+            .select({ conditionCode: conditions.conditionCode })
+            .from(conditions)
+            .where(
+               and(
+                  eq(conditions.patientId, priorAuth.patientId),
+                  isNull(conditions.resolvedDate),
+               ),
+            );
+         const diagnosisCodes = new Set(
+            patientConditions.map((condition) =>
+               String(condition.conditionCode).trim().toUpperCase(),
+            ),
+         );
+         const candidateGuidelines = await db
+            .select({
+               id: clinicalGuidelines.id,
+               applicableDiagnosisCode:
+                  clinicalGuidelines.applicableDiagnosisCode,
+            })
             .from(clinicalGuidelines)
             .where(
                eq(
@@ -820,7 +838,18 @@ export const createAppeal = async (req, res) => {
                   priorAuth.visitTypeId,
                ),
             )
-            .limit(1);
+            .orderBy(asc(clinicalGuidelines.id));
+         const matchedGuideline =
+            candidateGuidelines.find(
+               (guideline) =>
+                  guideline.applicableDiagnosisCode &&
+                  diagnosisCodes.has(
+                     guideline.applicableDiagnosisCode.trim().toUpperCase(),
+                  ),
+            ) ||
+            candidateGuidelines.find(
+               (guideline) => !guideline.applicableDiagnosisCode,
+            );
          if (matchedGuideline) guidelineId = matchedGuideline.id;
       }
 

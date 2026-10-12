@@ -1,0 +1,4 @@
+id,payer_name,plan_name,plan_type,coverage_pct
+1,PhilHealth,Standard,government,70.00
+2,Maxicare,Premium HMO,hmo,90.00
+3,Intellicare,Basic,hmo,60.00

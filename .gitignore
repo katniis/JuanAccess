@@ -144,6 +144,15 @@ vite.config.ts.timestamp-*
 
 # Large source datasets
 *.csv
+!docs/data/clinical_guidelines.csv
+!docs/data/visit_types.csv
+!docs/data/rooms.csv
+!docs/data/equipment.csv
+!docs/data/insurance_plans.csv
+!docs/data/providers.csv
+!docs/data/provider_availability.csv
+!docs/data/prior_auth_rules.csv
+!docs/data/fee_schedule.csv
 
 .agent
 .agents

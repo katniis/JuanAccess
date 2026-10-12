@@ -1,0 +1,7 @@
+id,name,equipment_type,room_id
+1,MRI Machine,imaging,4
+2,X-Ray Machine,imaging,4
+3,Ultrasound Machine,imaging,4
+4,ECG Machine,diagnostic,5
+5,Spirometer,diagnostic,6
+6,DEXA Scanner,imaging,7

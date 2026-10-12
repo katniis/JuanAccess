@@ -470,6 +470,7 @@ describe('Staff Backend Routes & Controller', () => {
             [staffUser],
             [priorAuth],
             [], // existing appeal check
+            [{ conditionCode: 'M23.2', resolvedDate: null }], // active diagnosis
             [guideline], // auto-match guideline
             [createdAppeal], // insert appeal
             [{ id: 12, status: 'appealed' }], // update prior auth
@@ -490,6 +491,140 @@ describe('Staff Backend Routes & Controller', () => {
          expect(res.status).toBe(201);
          const body = await readJson(res);
          expect(body.appeal.status).toBe('drafted');
+      });
+
+      it('matches the diagnosis-specific guideline before a generic same-visit row', async () => {
+         const priorAuth = {
+            id: 13,
+            status: 'denied',
+            justificationText: 'Knee osteoarthritis symptoms persist',
+            appointmentId: 51,
+            visitTypeId: 7,
+            patientId: 10,
+         };
+         const createdAppeal = {
+            id: 2,
+            priorAuthorizationId: 13,
+            guidelineId: 11,
+            status: 'drafted',
+            appealLetterText: 'Draft letter citing knee OA guidance.',
+         };
+
+         mockQueryQueue.push(
+            [staffUser],
+            [priorAuth],
+            [],
+            [{ conditionCode: 'M17.9', resolvedDate: null }],
+            [
+               { id: 10, applicableDiagnosisCode: null },
+               { id: 11, applicableDiagnosisCode: 'M17.9' },
+            ],
+            [createdAppeal],
+            [{ id: 13, status: 'appealed' }],
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/staff/appeals`, {
+            method: 'POST',
+            headers: {
+               ...authHeader(staffUser),
+               'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+               prior_authorization_id: 13,
+               appeal_letter_text: 'Draft letter citing knee OA guidance.',
+            }),
+         });
+
+         expect(res.status).toBe(201);
+         const body = await readJson(res);
+         expect(body.appeal.guidelineId).toBe(11);
+      });
+
+      it('falls back to a generic same-visit guideline when no diagnosis matches', async () => {
+         const priorAuth = {
+            id: 14,
+            status: 'denied',
+            justificationText: 'General primary-care follow-up',
+            appointmentId: 52,
+            visitTypeId: 7,
+            patientId: 10,
+         };
+         const createdAppeal = {
+            id: 3,
+            priorAuthorizationId: 14,
+            guidelineId: 20,
+            status: 'drafted',
+            appealLetterText: 'Draft generic primary-care letter.',
+         };
+
+         mockQueryQueue.push(
+            [staffUser],
+            [priorAuth],
+            [],
+            [{ conditionCode: 'I10', resolvedDate: null }],
+            [{ id: 20, applicableDiagnosisCode: null }],
+            [createdAppeal],
+            [{ id: 14, status: 'appealed' }],
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/staff/appeals`, {
+            method: 'POST',
+            headers: {
+               ...authHeader(staffUser),
+               'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+               prior_authorization_id: 14,
+               appeal_letter_text: 'Draft generic primary-care letter.',
+            }),
+         });
+
+         expect(res.status).toBe(201);
+         const body = await readJson(res);
+         expect(body.appeal.guidelineId).toBe(20);
+      });
+
+      it('keeps an explicitly supplied guideline selection', async () => {
+         const priorAuth = {
+            id: 15,
+            status: 'denied',
+            justificationText: 'Staff-selected guideline',
+            appointmentId: 53,
+            visitTypeId: 7,
+            patientId: 10,
+         };
+         const createdAppeal = {
+            id: 4,
+            priorAuthorizationId: 15,
+            guidelineId: 99,
+            status: 'drafted',
+            appealLetterText: 'Draft letter with selected guidance.',
+         };
+
+         mockQueryQueue.push(
+            [staffUser],
+            [priorAuth],
+            [],
+            [createdAppeal],
+            [{ id: 15, status: 'appealed' }],
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/staff/appeals`, {
+            method: 'POST',
+            headers: {
+               ...authHeader(staffUser),
+               'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+               prior_authorization_id: 15,
+               guideline_id: 99,
+               appeal_letter_text: 'Draft letter with selected guidance.',
+            }),
+         });
+
+         expect(res.status).toBe(201);
+         const body = await readJson(res);
+         expect(body.appeal.guidelineId).toBe(99);
       });
 
       it('fetches appeal details with guideline excerpt and chart justification', async () => {
