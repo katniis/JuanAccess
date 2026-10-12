@@ -15,6 +15,7 @@ import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 import { createPriorAuthorizationForAppointment } from '../services/prior-auth.service.js';
 import { notifyPatient } from '../services/notification.service.js';
+import { generatePriorAuthDraft } from '../services/prior-auth-draft.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -433,6 +434,16 @@ export const createAppointment = async (req, res) => {
 
       if (result.error) {
          return res.status(result.status).json({ error: result.error });
+      }
+      if (result.priorAuthorization?.status === 'needs_draft') {
+         void generatePriorAuthDraft(result.priorAuthorization.id).catch(
+            (error) => {
+               console.error(
+                  'Prior-authorization draft enqueue failed:',
+                  error,
+               );
+            },
+         );
       }
       return res.status(201).json({
          ...result.appointment,

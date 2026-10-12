@@ -36,6 +36,7 @@ import { manilaDateBounds } from '../utils/timezone.js';
 import { generateGeminiDraft } from '../services/gemini.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { notifyPatient } from '../services/notification.service.js';
+import { generatePriorAuthDraft } from '../services/prior-auth-draft.service.js';
 
 export const getDashboard = async (req, res) => {
    try {
@@ -488,7 +489,16 @@ export const getPriorAuthDetail = async (req, res) => {
          .limit(1);
 
       return res.status(200).json({
-         priorAuthorization: record,
+         priorAuthorization: {
+            ...record,
+            generationSource: record.justificationText
+               ? record.aiGeneratedAt
+                  ? 'gemini'
+                  : record.reviewedBy
+                    ? 'staff'
+                    : 'fallback'
+               : null,
+         },
          conditions: patientConditions,
          coverage: coverage || null,
       });
@@ -536,15 +546,23 @@ export const draftPriorAuthJustification = async (req, res) => {
          });
       }
 
-      const fallback =
-         justificationText?.trim() ||
-         'Staff review draft: document symptoms, duration, prior conservative treatment, examination findings, and medical necessity for the requested service.';
-      const generated = justificationText?.trim()
-         ? { text: justificationText.trim(), source: 'staff' }
-         : await generateGeminiDraft({
-              prompt: `Draft a concise prior-authorization justification for staff review. Do not invent facts. Prior authorization ID: ${authId}. Appointment ID: ${existing.appointmentId}. Status: ${existing.status}.`,
-              fallback,
-           });
+      if (!justificationText?.trim()) {
+         const generated = await generatePriorAuthDraft(authId, {
+            force: true,
+            reviewedBy: req.user.id,
+            notify: false,
+         });
+         if (!generated) {
+            return res.status(409).json({
+               error: 'Prior authorization changed; refresh and try again',
+            });
+         }
+         return res.status(200).json({
+            message: 'Prior authorization draft saved successfully',
+            priorAuthorization: generated.priorAuthorization,
+            source: generated.source,
+         });
+      }
 
       // Transition needs_draft -> drafted, or keep as drafted
       const nextStatus =
@@ -553,8 +571,8 @@ export const draftPriorAuthJustification = async (req, res) => {
       const [updated] = await db
          .update(priorAuthorizations)
          .set({
-            justificationText: generated.text,
-            aiGeneratedAt: generated.source === 'gemini' ? new Date() : null,
+            justificationText: justificationText.trim(),
+            aiGeneratedAt: null,
             status: nextStatus,
             reviewedBy: req.user.id,
             updatedBy: req.user.id,
