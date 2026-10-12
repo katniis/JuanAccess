@@ -2,19 +2,21 @@
 
 Accessed 2026-10-12.
 
-## PhilHealth
+## Insurance simulation
 
-PhilHealth's public online-services page describes Claims Eligibility Checking for providers and links to eClaims services. The official eClaims circular describes provider eligibility checking, electronic claim submission, claim tracking, and reimbursement workflows.
+PhilHealth's public materials describe provider eligibility checking and eClaims workflows, but the project does not call those services. The application uses a clearly labeled local insurance-plan simulation for staff-selected active/inactive coverage and synthetic prior-authorization decisions; it does not submit or appeal a real payer request.
 
 - https://www.philhealth.gov.ph/services/
 - https://www.philhealth.gov.ph/circulars/2016/circ2016-016.pdf
 - https://www.philhealth.gov.ph/downloads/
 
-The published materials do not provide a general public prior-authorization API. The application therefore uses a clearly labeled local insurance-plan simulation for demo accept/reject decisions; it does not claim to submit or appeal a real payer request.
-
 ## Application limits
 
-The insurer adapter is server-side. Eligibility remains manual unless PhilHealth credentials, account keys, facility identifiers, and a supplied endpoint path are configured. Prior authorization decisions are local demo outcomes, and insurance-company appeals are out of scope. No patient records or Synthea data are included in this integration work.
+The insurer adapter is server-side and local-only. New coverage remains `unverified` until staff selects `active` or `inactive`; prior authorization defaults to `approved` unless staff chooses another synthetic outcome. Insurance-company appeals are out of scope. No patient records or Synthea data are included in this integration work.
+
+## Bill files
+
+Bill uploads use the private Supabase Storage bucket `patient-bills` under `patients/{patientId}/bills/{uuid}`. The API returns a short-lived signed preview URL only after patient or staff authorization. Gemini OCR returns draft line items requiring review, and raw document bytes are not written to Postgres or application logs.
 
 ## Gemini document extraction
 
