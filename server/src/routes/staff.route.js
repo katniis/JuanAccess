@@ -7,6 +7,10 @@ import {
    getAppealDetail,
    getAppealsQueue,
    getAppointmentPreVisitData,
+   getAppointmentProcedures,
+   createAppointmentProcedure,
+   getStaffDisputes,
+   getStaffFeeSchedule,
    getDashboard,
    getDoctorScheduleHandler,
    getDoctors,
@@ -28,6 +32,16 @@ import {
 } from '../controller/staff.controller.js';
 import { requireStaff, requireStaffAdmin } from '../middleware/authRole.js';
 import { verifyToken } from '../middleware/verifyToken.js';
+import {
+   createAdminReference,
+   createStaffInvitation,
+   deleteAdminReference,
+   listAdminReferenceData,
+   listAdminUsers,
+   updateAdminReference,
+   updateAdminProvider,
+   updateAdminUser,
+} from '../controller/admin.controller.js';
 
 const router = express.Router();
 
@@ -42,6 +56,10 @@ router.get('/doctors/:id/schedule', getDoctorScheduleHandler);
 router.get('/patients', getPatients);
 router.get('/patients/:id', getPatientDetails);
 router.get('/appointments/:id/pre-visit-data', getAppointmentPreVisitData);
+router.get('/appointments/:id/procedures', getAppointmentProcedures);
+router.post('/appointments/:id/procedures', createAppointmentProcedure);
+router.get('/disputes', getStaffDisputes);
+router.get('/fee-schedule', getStaffFeeSchedule);
 
 // 2. Slots & Utilization
 router.get('/slots/utilization', getSlotsUtilization);
@@ -71,6 +89,27 @@ router.patch('/appeals/:id/decision', requireStaffAdmin, updateAppealDecision);
 // 5. Clinical Guidelines
 router.get('/guidelines', getGuidelines);
 router.post('/guidelines', requireStaffAdmin, createGuideline);
+
+router.get('/admin/users', requireStaffAdmin, listAdminUsers);
+router.patch('/admin/users/:id', requireStaffAdmin, updateAdminUser);
+router.post('/admin/invitations', requireStaffAdmin, createStaffInvitation);
+router.patch('/admin/providers/:id', requireStaffAdmin, updateAdminProvider);
+router.get('/admin/reference-data', requireStaffAdmin, listAdminReferenceData);
+router.post(
+   '/admin/reference/:resource',
+   requireStaffAdmin,
+   createAdminReference,
+);
+router.patch(
+   '/admin/reference/:resource/:id',
+   requireStaffAdmin,
+   updateAdminReference,
+);
+router.delete(
+   '/admin/reference/:resource/:id',
+   requireStaffAdmin,
+   deleteAdminReference,
+);
 
 // 6. Insurance Verification (New Patient Handling)
 router.get('/insurance/unverified', getUnverifiedCoverages);

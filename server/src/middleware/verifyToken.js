@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 
@@ -34,7 +34,7 @@ export const verifyToken = async (req, res, next) => {
             displayName: users.displayName,
          })
          .from(users)
-         .where(eq(users.id, decoded.id))
+         .where(and(eq(users.id, decoded.id), eq(users.isActive, true)))
          .limit(1);
 
       if (!user) {

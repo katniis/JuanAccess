@@ -1,4 +1,10 @@
-import { pgTable, serial, varchar, timestamp } from 'drizzle-orm/pg-core';
+import {
+   boolean,
+   pgTable,
+   serial,
+   varchar,
+   timestamp,
+} from 'drizzle-orm/pg-core';
 
 export const providers = pgTable('providers', {
    id: serial('id').primaryKey(),
@@ -18,6 +24,8 @@ export const providers = pgTable('providers', {
    npiNumber: varchar('npi_number', {
       length: 20,
    }),
+
+   isActive: boolean('is_active').notNull().default(true),
 
    createdAt: timestamp('created_at', {
       withTimezone: true,

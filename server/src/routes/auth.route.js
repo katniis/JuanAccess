@@ -4,6 +4,7 @@ import {
    logout,
    patientRegister,
    providerRegister,
+   acceptStaffInvitation,
 } from '../controller/auth.controller.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 
@@ -32,6 +33,8 @@ router.post(
    requireStaffAdmin,
    providerRegister,
 );
+
+router.post('/accept-invite', acceptStaffInvitation);
 
 //Logout
 router.post('/logout', logout);

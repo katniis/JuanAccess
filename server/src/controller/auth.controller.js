@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { patients } from '../db/schema/patients.js';
 import { providers } from '../db/schema/providers.js';
 import { users } from '../db/schema/users.js';
+import { userInvitations } from '../db/schema/userInvitations.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
 import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
 
@@ -31,7 +33,7 @@ const findUserByEmail = async (email) => {
    const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), eq(users.isActive, true)))
       .limit(1);
 
    return user;
@@ -236,6 +238,83 @@ export const providerRegister = async (req, res) => {
       });
    } catch (error) {
       console.error('Provider registration failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const acceptStaffInvitation = async (req, res) => {
+   const token =
+      typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+   const password =
+      typeof req.body?.password === 'string' ? req.body.password : '';
+   if (!token || password.length < 8) {
+      return res
+         .status(400)
+         .json({ message: 'A valid token and password are required.' });
+   }
+   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+   try {
+      const result = await db.transaction(async (tx) => {
+         const [invite] = await tx
+            .select()
+            .from(userInvitations)
+            .where(
+               and(
+                  eq(userInvitations.tokenHash, tokenHash),
+                  isNull(userInvitations.acceptedAt),
+                  gt(userInvitations.expiresAt, new Date()),
+               ),
+            )
+            .limit(1);
+         if (!invite) return null;
+         const existing = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, invite.email))
+            .limit(1);
+         if (existing.length) return { conflict: true };
+         const passwordHash = await bcrypt.hash(password, passwordRounds);
+         let providerId = null;
+         if (invite.role === 'staff') {
+            const [provider] = await tx
+               .insert(providers)
+               .values({
+                  firstName: invite.firstName,
+                  lastName: invite.lastName,
+                  specialty: invite.specialty,
+                  npiNumber: invite.npiNumber,
+               })
+               .returning({ id: providers.id });
+            providerId = provider.id;
+         }
+         const [user] = await tx
+            .insert(users)
+            .values({
+               email: invite.email,
+               passwordHash,
+               role: invite.role,
+               providerId,
+               displayName: `${invite.firstName} ${invite.lastName}`,
+            })
+            .returning();
+         await tx
+            .update(userInvitations)
+            .set({ acceptedAt: new Date() })
+            .where(eq(userInvitations.id, invite.id));
+         return { user };
+      });
+      if (!result)
+         return res
+            .status(400)
+            .json({ message: 'Invitation is invalid or expired.' });
+      if (result.conflict)
+         return res
+            .status(409)
+            .json({ message: 'Email is already registered.' });
+      res.cookie('token', generateToken(result.user.id), cookieOptions);
+      return res.status(201).json({ user: safeUser(result.user) });
+   } catch (error) {
+      console.error('Invitation acceptance failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };

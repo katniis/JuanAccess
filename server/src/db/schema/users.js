@@ -1,4 +1,5 @@
 import {
+   boolean,
    pgTable,
    serial,
    varchar,
@@ -37,6 +38,8 @@ export const users = pgTable(
       displayName: varchar('display_name', {
          length: 150,
       }).notNull(),
+
+      isActive: boolean('is_active').notNull().default(true),
 
       createdAt: timestamp('created_at', {
          withTimezone: true,
