@@ -2,6 +2,7 @@ import express from 'express';
 import {
    createPatientBill,
    editMyDisputeLetter,
+   extractMyBillLineItems,
    getMyBill,
    getMyBills,
    explainMyBill,
@@ -13,6 +14,7 @@ const router = express.Router();
 
 router.use(verifyToken);
 router.post('/', createPatientBill);
+router.post('/ocr', extractMyBillLineItems);
 router.get('/mine', getMyBills);
 router.get('/:id', getMyBill);
 router.get('/:id/explanation', explainMyBill);

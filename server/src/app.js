@@ -20,7 +20,7 @@ app.use(
       credentials: true,
    }),
 );
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '12mb' }));
 app.use(cookieParser());
 
 app.use((req, res, next) => {

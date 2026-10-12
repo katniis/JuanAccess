@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
-import { generateGeminiDraft } from '../services/gemini.service.js';
+import {
+   extractBillLineItems,
+   generateGeminiDraft,
+} from '../services/gemini.service.js';
 
 const originalKey = process.env.GEMINI_API_KEY;
 const originalFetch = global.fetch;
@@ -44,5 +47,55 @@ describe('Gemini draft service', () => {
          fallback: 'fallback text',
       });
       expect(result).toEqual({ text: 'fallback text', source: 'fallback' });
+   });
+
+   it('extracts bill rows as structured data from Gemini', async () => {
+      process.env.GEMINI_API_KEY = 'test-key';
+      global.fetch = jest.fn().mockResolvedValue({
+         ok: true,
+         json: async () => ({
+            candidates: [
+               {
+                  content: {
+                     parts: [
+                        {
+                           text: '{"line_items":[{"procedure_code":"CBC","description":"Complete blood count","amount":450}]}',
+                        },
+                     ],
+                  },
+               },
+            ],
+         }),
+      });
+
+      const result = await extractBillLineItems({
+         documentBase64: Buffer.from('bill').toString('base64'),
+         mimeType: 'application/pdf',
+      });
+
+      expect(result).toEqual({
+         lineItems: [
+            {
+               procedureCode: 'CBC',
+               description: 'Complete blood count',
+               amount: 450,
+            },
+         ],
+         source: 'gemini',
+         requiresManualReview: true,
+      });
+   });
+
+   it('falls back when bill OCR has no key or invalid input', async () => {
+      delete process.env.GEMINI_API_KEY;
+      const result = await extractBillLineItems({
+         documentBase64: 'not-a-document',
+         mimeType: 'application/pdf',
+      });
+      expect(result).toEqual({
+         lineItems: [],
+         source: 'fallback',
+         requiresManualReview: true,
+      });
    });
 });

@@ -6,10 +6,42 @@ import {
    markDisputeDownloaded,
    updatePatientDisputeLetter,
 } from '../services/billing.service.js';
+import { extractBillLineItems } from '../services/gemini.service.js';
 
 function patientId(req) {
    return req.user?.role === 'patient' ? req.user.patientId : null;
 }
+
+export const extractMyBillLineItems = async (req, res) => {
+   const id = patientId(req);
+   if (!id) return res.status(403).json({ error: 'Patient access required' });
+
+   const documentBase64 = req.body?.document_base64;
+   const mimeType = req.body?.mime_type;
+   if (
+      typeof documentBase64 !== 'string' ||
+      !documentBase64.trim() ||
+      typeof mimeType !== 'string' ||
+      !mimeType.trim()
+   ) {
+      return res.status(400).json({
+         error: 'document_base64 and mime_type are required',
+      });
+   }
+
+   try {
+      const result = await extractBillLineItems({
+         documentBase64: documentBase64.trim(),
+         mimeType: mimeType.trim(),
+      });
+      return res.json(result);
+   } catch (error) {
+      console.error('Failed to extract bill line items:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to extract bill line items' });
+   }
+};
 
 export const createPatientBill = async (req, res) => {
    const id = patientId(req);
