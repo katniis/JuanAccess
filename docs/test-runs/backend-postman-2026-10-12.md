@@ -62,3 +62,19 @@ The same paths without a cookie returned `401` with `{"message":"Not authorized:
 - Write-heavy collection runs must use a disposable local or staging database.
 - Secrets, cookies, document bytes, and unrestricted clinical text are redacted by the collection logger.
 - Aceso currently contains five saved requests with empty URL fields. The agent can run ad-hoc requests with the correct paths, but saved collection items need URLs before they can be used as a repeatable full suite.
+
+## Supplemental full verification
+
+The Postman Agent reached its AI-credit limit after the authenticated Aceso smoke run. I used the normal Postman UI for the final visible checks (`GET /api/health` → `200`, and unauthenticated `GET /appointment/visit-type` → `401`) and ran the repository collection through the local Postman CLI against the same API and database. The Aceso cloud collection was not modified.
+
+- Requests: 89
+- Assertions: 90
+- Request failures: 0
+- Assertion failures: 0
+- Full request/response log: [backend-postman-2026-10-12-full.md](C:/Users/jbree/untitled/docs/test-runs/backend-postman-2026-10-12-full.md)
+
+The booking scenario created an active synthetic coverage record, booked MRI Knee, observed `priorAuthorizationStatus: needs_draft`, then polled the staff detail endpoint until it reached `drafted`. The generated justification was non-empty, used the deterministic fallback source, and created `prior_authorization_draft_ready`. A no-prior-auth visit did not create a draft. Staff edits and invalid transition checks also passed.
+
+The run found and fixed a real date comparison issue: Postgres returned coverage dates as timestamps while the service compared them directly with date-only strings. Both coverage status and prior-auth rule selection now normalize dates through the existing Manila date helper. After the fix, the booking automation reached `drafted` and the suite passed.
+
+After cleanup, the database had zero synthetic users, patients, appointments, prior authorizations, appeals, notifications, coverage rows, waitlist entries, bills, and Postman reference rows. Existing provider/reference data remained intact; the nine pre-existing audit rows were preserved.
