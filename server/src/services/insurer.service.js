@@ -1,18 +1,20 @@
 /**
- * Mock Insurer Service
+ * Local insurance-plan simulation
  *
- * Provides mock insurer adjudication for prior-authorizations and appeals,
- * per the project specifications in docs.md (reliably demoable denial -> appeal path).
+ * Provides deterministic plan decisions for prior-authorizations. There is no
+ * external payer appeal workflow in this project.
  */
 
 export const mockInsurerService = {
    /**
-    * Submit a prior authorization to the mock insurer.
-    * By default, returns a denial to enable the denial -> appeal workflow demonstration,
-    * unless explicit mockOutcome ('approved' | 'submitted' | 'denied') is requested.
+    * Submit a prior authorization to the local plan simulation.
+    * The caller may choose approved, denied, or submitted for a demo flow.
+    * Approved is the default so the workflow completes without an external payer.
     */
    adjudicatePriorAuth({ mockOutcome } = {}) {
-      const outcome = mockOutcome || 'denied';
+      const outcome = ['approved', 'denied', 'submitted'].includes(mockOutcome)
+         ? mockOutcome
+         : 'approved';
 
       if (outcome === 'submitted') {
          return {
@@ -30,9 +32,9 @@ export const mockInsurerService = {
          };
       }
 
-      // Default: denied with clinical justification reason
+      // Explicit denial with a synthetic plan reason.
       const defaultReason =
-         'Initial review determination: documentation provided does not satisfy clinical policy requirements. Insufficient trial of conservative outpatient therapy (minimum 6 weeks) documented prior to authorizing advanced imaging/procedure.';
+         'Local insurance-plan simulation denied the request for demonstration purposes.';
 
       return {
          status: 'denied',
@@ -132,10 +134,10 @@ export const insurerService = {
       return manualOutcome('Eligibility');
    },
 
-   submitPriorAuthorization({ mockOutcome } = {}) {
-      if (mockOutcome)
-         return mockInsurerService.adjudicatePriorAuth({ mockOutcome });
-      return manualOutcome('Prior authorization');
+   submitPriorAuthorization({ mockOutcome, planDecision } = {}) {
+      return mockInsurerService.adjudicatePriorAuth({
+         mockOutcome: mockOutcome || planDecision,
+      });
    },
 
    getPriorAuthorizationStatus() {
@@ -143,9 +145,7 @@ export const insurerService = {
    },
 
    submitAppeal({ mockOutcome } = {}) {
-      if (mockOutcome)
-         return mockInsurerService.adjudicateAppeal({ mockOutcome });
-      return manualOutcome('Appeal');
+      return mockInsurerService.adjudicateAppeal({ mockOutcome });
    },
 
    getAppealStatus() {

@@ -9,11 +9,16 @@ afterEach(() => {
 });
 
 describe('insurer adapter', () => {
-   it('keeps prior authorization in manual review by default', () => {
+   it('uses a local approved plan decision by default', () => {
       delete process.env.INSURER_MODE;
-      expect(insurerService.submitPriorAuthorization().status).toBe(
-         'manual_review',
-      );
+      expect(insurerService.submitPriorAuthorization().status).toBe('approved');
+   });
+
+   it('allows the staff flow to choose a synthetic plan decision', () => {
+      expect(
+         insurerService.submitPriorAuthorization({ planDecision: 'denied' })
+            .status,
+      ).toBe('denied');
    });
 
    it('retains the deterministic mock for test submissions', () => {

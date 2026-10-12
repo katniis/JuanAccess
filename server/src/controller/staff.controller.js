@@ -616,10 +616,10 @@ export const submitPriorAuth = async (req, res) => {
          });
       }
 
-      // Adjudicate via Mock Insurer
+      // Use the local plan simulation; no external payer request is made.
       const outcome = insurerService.submitPriorAuthorization({
          priorAuth: record,
-         mockOutcome: req.body?.mock_outcome,
+         planDecision: req.body?.plan_decision ?? req.body?.mock_outcome,
       });
 
       const [updated] = await db
@@ -640,13 +640,13 @@ export const submitPriorAuth = async (req, res) => {
          void recordAudit({
             entityType: 'prior_authorization',
             entityId: authId,
-            action: 'insurer_submission',
+            action: 'plan_simulation',
             changedBy: req.user.id,
-            newValue: { status: outcome.status },
+            newValue: { status: outcome.status, source: 'local_plan' },
          });
 
       return res.status(200).json({
-         message: `Prior authorization submitted to insurer: outcome is ${outcome.status}`,
+         message: `Prior authorization processed by the local insurance-plan simulation: outcome is ${outcome.status}`,
          priorAuthorization: updated,
       });
    } catch (error) {
