@@ -23,3 +23,9 @@ Bill uploads use the private Supabase Storage bucket `patient-bills` under `pati
 Gemini's `generateContent` API accepts inline PDF and image bytes and can return structured JSON. The patient-scoped `/bills/ocr` endpoint sends a document to Gemini for line-item extraction, returns the rows for review, and falls back to an empty manual-review result when the key or provider is unavailable. Document bytes are not logged or stored by the API.
 
 - https://ai.google.dev/gemini-api/docs/generate-content/document-processing
+
+## Prior-authorization drafting
+
+When a booking matches a prior-authorization rule, the API commits the appointment first and then generates a chart-aware justification draft in a post-booking job. The job reads only the appointment's documented clinical context, uses Gemini when available, falls back to a deterministic review draft on provider failure, and never submits or approves the request. Pending `needs_draft` records are retried by the server worker, while staff edits remain authoritative.
+
+Postman verification artifacts under `tools/postman/` exercise the live API against disposable environments. Full synthetic request and response bodies are available only when `io_log_mode=full`; secrets are always redacted.
