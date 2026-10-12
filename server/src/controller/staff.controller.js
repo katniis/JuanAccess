@@ -35,6 +35,7 @@ import {
 import { manilaDateBounds } from '../utils/timezone.js';
 import { generateGeminiDraft } from '../services/gemini.service.js';
 import { recordAudit } from '../services/audit.service.js';
+import { notifyPatient } from '../services/notification.service.js';
 
 export const getDashboard = async (req, res) => {
    try {
@@ -622,19 +623,30 @@ export const submitPriorAuth = async (req, res) => {
          planDecision: req.body?.plan_decision ?? req.body?.mock_outcome,
       });
 
-      const [updated] = await db
-         .update(priorAuthorizations)
-         .set({
-            status: outcome.status,
-            denialReason: outcome.denialReason ?? null,
-            decisionAt: outcome.decisionAt ?? null,
-            submittedBy: req.user.id,
-            submittedAt: new Date(),
-            updatedBy: req.user.id,
-            updatedAt: new Date(),
-         })
-         .where(eq(priorAuthorizations.id, authId))
-         .returning();
+      const [updated] = await db.transaction(async (tx) => {
+         const [next] = await tx
+            .update(priorAuthorizations)
+            .set({
+               status: outcome.status,
+               denialReason: outcome.denialReason ?? null,
+               decisionAt: outcome.decisionAt ?? null,
+               submittedBy: req.user.id,
+               submittedAt: new Date(),
+               updatedBy: req.user.id,
+               updatedAt: new Date(),
+            })
+            .where(eq(priorAuthorizations.id, authId))
+            .returning();
+         if (next) {
+            await notifyPatient(
+               tx,
+               record.patientId,
+               'prior_authorization_decision',
+               `Your prior authorization was processed as ${outcome.status}.`,
+            );
+         }
+         return [next];
+      });
 
       if (updated)
          void recordAudit({
@@ -685,8 +697,13 @@ export const updatePriorAuthDecision = async (req, res) => {
          .select({
             id: priorAuthorizations.id,
             status: priorAuthorizations.status,
+            patientId: appointments.patientId,
          })
          .from(priorAuthorizations)
+         .innerJoin(
+            appointments,
+            eq(appointments.id, priorAuthorizations.appointmentId),
+         )
          .where(eq(priorAuthorizations.id, authId))
          .limit(1);
 
@@ -702,20 +719,31 @@ export const updatePriorAuthDecision = async (req, res) => {
          });
       }
 
-      const [updated] = await db
-         .update(priorAuthorizations)
-         .set({
-            status,
-            denialReason:
-               status === 'denied'
-                  ? denialReason || 'Denied by insurer review'
-                  : null,
-            decisionAt: new Date(),
-            updatedBy: req.user.id,
-            updatedAt: new Date(),
-         })
-         .where(eq(priorAuthorizations.id, authId))
-         .returning();
+      const [updated] = await db.transaction(async (tx) => {
+         const [next] = await tx
+            .update(priorAuthorizations)
+            .set({
+               status,
+               denialReason:
+                  status === 'denied'
+                     ? denialReason || 'Denied by local plan simulation'
+                     : null,
+               decisionAt: new Date(),
+               updatedBy: req.user.id,
+               updatedAt: new Date(),
+            })
+            .where(eq(priorAuthorizations.id, authId))
+            .returning();
+         if (next) {
+            await notifyPatient(
+               tx,
+               existing.patientId,
+               'prior_authorization_decision',
+               `Your prior authorization was marked as ${status}.`,
+            );
+         }
+         return [next];
+      });
 
       return res.status(200).json({
          message: `Prior authorization marked as ${status}`,
@@ -983,6 +1011,13 @@ export const createAppeal = async (req, res) => {
             .set({ status: 'appealed', updatedAt: new Date() })
             .where(eq(priorAuthorizations.id, priorAuthId));
 
+         await notifyPatient(
+            tx,
+            priorAuth.patientId,
+            'appeal_draft_available',
+            'A prior-authorization appeal draft is available for review.',
+         );
+
          return [created];
       });
 
@@ -1076,8 +1111,17 @@ export const submitAppeal = async (req, res) => {
             priorAuthorizationId: appeals.priorAuthorizationId,
             guidelineId: appeals.guidelineId,
             appealLetterText: appeals.appealLetterText,
+            patientId: appointments.patientId,
          })
          .from(appeals)
+         .innerJoin(
+            priorAuthorizations,
+            eq(priorAuthorizations.id, appeals.priorAuthorizationId),
+         )
+         .innerJoin(
+            appointments,
+            eq(appointments.id, priorAuthorizations.appointmentId),
+         )
          .where(eq(appeals.id, appealId))
          .limit(1);
 
@@ -1143,6 +1187,15 @@ export const submitAppeal = async (req, res) => {
                );
          }
 
+         if (appealRecord.patientId) {
+            await notifyPatient(
+               tx,
+               appealRecord.patientId,
+               'appeal_decision',
+               `Your local plan appeal was processed as ${outcome.status}.`,
+            );
+         }
+
          return [app];
       });
 
@@ -1186,8 +1239,21 @@ export const updateAppealDecision = async (req, res) => {
 
    try {
       const [appealRecord] = await db
-         .select()
+         .select({
+            id: appeals.id,
+            status: appeals.status,
+            priorAuthorizationId: appeals.priorAuthorizationId,
+            patientId: appointments.patientId,
+         })
          .from(appeals)
+         .innerJoin(
+            priorAuthorizations,
+            eq(priorAuthorizations.id, appeals.priorAuthorizationId),
+         )
+         .innerJoin(
+            appointments,
+            eq(appointments.id, priorAuthorizations.appointmentId),
+         )
          .where(eq(appeals.id, appealId))
          .limit(1);
 
@@ -1238,6 +1304,13 @@ export const updateAppealDecision = async (req, res) => {
                   eq(priorAuthorizations.id, appealRecord.priorAuthorizationId),
                );
          }
+
+         await notifyPatient(
+            tx,
+            appealRecord.patientId,
+            'appeal_decision',
+            `Your local plan appeal was marked as ${status}.`,
+         );
 
          return [app];
       });
@@ -1378,19 +1451,24 @@ export const getUnverifiedCoverages = async (req, res) => {
 
 export const verifyCoverageStaff = async (req, res) => {
    const coverageId = Number(req.params.id);
-   const { status } = req.body ?? {};
+   const requestedStatus = req.body?.status;
 
    if (!Number.isInteger(coverageId) || coverageId < 1) {
       return res.status(400).json({ error: 'Invalid coverage ID' });
    }
 
-   if (!['active', 'inactive'].includes(status)) {
+   if (!['active', 'inactive'].includes(requestedStatus)) {
       return res
          .status(400)
          .json({ error: 'Status must be active or inactive' });
    }
 
    try {
+      const status = (
+         await insurerService.verifyEligibility({
+            eligibilityStatus: requestedStatus,
+         })
+      ).status;
       const entry = await db.transaction(async (tx) => {
          const [updated] = await tx
             .update(patientCoverage)
@@ -1408,6 +1486,13 @@ export const verifyCoverageStaff = async (req, res) => {
             });
 
          if (!updated) return null;
+
+         await notifyPatient(
+            tx,
+            updated.patientId,
+            'coverage_simulation',
+            `Your insurance coverage was simulated as ${status}.`,
+         );
 
          // Cascade status update to patient's upcoming scheduled appointments
          const upcoming = await tx
@@ -1436,15 +1521,28 @@ export const verifyCoverageStaff = async (req, res) => {
                .where(eq(appointments.id, appointment.id));
          }
 
-         return { id: updated.id, status, verifiedAt: updated.verifiedAt };
+         return {
+            id: updated.id,
+            patientId: updated.patientId,
+            status,
+            verifiedAt: updated.verifiedAt,
+         };
       });
 
       if (!entry) {
          return res.status(404).json({ error: 'Coverage record not found' });
       }
 
+      void recordAudit({
+         entityType: 'patient_coverage',
+         entityId: entry.id,
+         action: 'coverage_simulation',
+         changedBy: req.user.id,
+         newValue: { status: entry.status, source: 'local_plan' },
+      });
+
       return res.status(200).json({
-         message: `Insurance coverage verified as ${status}`,
+         message: `Insurance coverage verified as ${status} (simulated)`,
          coverage: entry,
       });
    } catch (error) {

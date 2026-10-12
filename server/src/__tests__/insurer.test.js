@@ -1,16 +1,8 @@
-import { afterEach, describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from '@jest/globals';
 import { insurerService } from '../services/insurer.service.js';
-
-const originalMode = process.env.INSURER_MODE;
-
-afterEach(() => {
-   if (originalMode === undefined) delete process.env.INSURER_MODE;
-   else process.env.INSURER_MODE = originalMode;
-});
 
 describe('insurer adapter', () => {
    it('uses a local approved plan decision by default', () => {
-      delete process.env.INSURER_MODE;
       expect(insurerService.submitPriorAuthorization().status).toBe('approved');
    });
 
@@ -31,14 +23,18 @@ describe('insurer adapter', () => {
       ).toBe('approved');
    });
 
-   it('does not call PhilHealth without configured credentials', async () => {
-      process.env.INSURER_MODE = 'philhealth';
-      delete process.env.PHILHEALTH_BASE_URL;
-      delete process.env.PHILHEALTH_USERNAME;
-      delete process.env.PHILHEALTH_PASSWORD;
-      expect(
-         (await insurerService.verifyEligibility({ member_id: 'synthetic' }))
-            .status,
-      ).toBe('manual_review');
+   it('simulates active eligibility by default and supports staff inactive decisions', async () => {
+      await expect(insurerService.verifyEligibility()).resolves.toMatchObject({
+         status: 'active',
+         eligible: true,
+         source: 'local_plan',
+      });
+      await expect(
+         insurerService.verifyEligibility({ eligibilityStatus: 'inactive' }),
+      ).resolves.toMatchObject({
+         status: 'inactive',
+         eligible: false,
+         source: 'local_plan',
+      });
    });
 });
