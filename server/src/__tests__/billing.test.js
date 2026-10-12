@@ -74,4 +74,28 @@ describe('billing and performed-procedure routes', () => {
       );
       expect(res.status).toBe(403);
    });
+
+   it('requires a file for bill uploads', async () => {
+      mockQueryQueue.push([patientUser]);
+      const res = await fetch(`${ctx.baseUrl}/bills/upload`, {
+         method: 'POST',
+         headers: authHeader(patientUser),
+      });
+      expect(res.status).toBe(400);
+      expect(await readJson(res)).toEqual({ error: 'A bill file is required' });
+   });
+
+   it('rejects another patient storage path during reviewed bill creation', async () => {
+      mockQueryQueue.push([patientUser]);
+      const res = await postJson(
+         ctx.baseUrl,
+         '/bills',
+         {
+            uploaded_file_url: 'patients/99/bills/other.pdf',
+            line_items: [],
+         },
+         authHeader(patientUser),
+      );
+      expect(res.status).toBe(403);
+   });
 });

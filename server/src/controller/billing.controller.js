@@ -7,10 +7,51 @@ import {
    updatePatientDisputeLetter,
 } from '../services/billing.service.js';
 import { extractBillLineItems } from '../services/gemini.service.js';
+import {
+   BillStorageNotConfiguredError,
+   createBillSignedUrl,
+   isPatientBillPath,
+   uploadBillFile,
+} from '../services/bill-storage.service.js';
 
 function patientId(req) {
    return req.user?.role === 'patient' ? req.user.patientId : null;
 }
+
+export const uploadPatientBill = async (req, res) => {
+   const id = patientId(req);
+   if (!id) return res.status(403).json({ error: 'Patient access required' });
+   if (!req.file) {
+      return res.status(400).json({ error: 'A bill file is required' });
+   }
+
+   try {
+      const stored = await uploadBillFile({ patientId: id, file: req.file });
+      const extracted = await extractBillLineItems({
+         documentBase64: req.file.buffer.toString('base64'),
+         mimeType: req.file.mimetype,
+      });
+      return res.status(201).json({
+         uploadedFileUrl: stored.path,
+         previewUrl: await createBillSignedUrl(stored.path, id),
+         ...extracted,
+      });
+   } catch (error) {
+      if (error instanceof BillStorageNotConfiguredError) {
+         return res.status(503).json({
+            error: 'Bill storage is not configured',
+         });
+      }
+      if (error?.message === 'Unsupported bill file type') {
+         return res.status(400).json({ error: error.message });
+      }
+      if (error?.message === 'Bill file is empty or too large') {
+         return res.status(413).json({ error: error.message });
+      }
+      console.error('Failed to upload bill file:', error);
+      return res.status(500).json({ error: 'Failed to upload bill file' });
+   }
+};
 
 export const extractMyBillLineItems = async (req, res) => {
    const id = patientId(req);
@@ -63,6 +104,12 @@ export const createPatientBill = async (req, res) => {
       return res.status(400).json({
          error: 'uploaded_file_url and line_items are required',
       });
+   }
+   if (
+      uploadedFileUrl.startsWith('patients/') &&
+      !isPatientBillPath(uploadedFileUrl, id)
+   ) {
+      return res.status(403).json({ error: 'Invalid bill storage path' });
    }
 
    const normalizedItems = lineItems.map((item) => ({

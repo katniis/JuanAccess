@@ -20,6 +20,7 @@
    "license": "ISC",
    "type": "module",
    "dependencies": {
+      "@supabase/supabase-js": "^2.117.3",
       "bcryptjs": "^3.0.3",
       "cookie-parser": "^1.4.7",
       "cors": "^2.8.6",
@@ -28,6 +29,7 @@
       "express": "^5.2.1",
       "jest": "^30.5.2",
       "jsonwebtoken": "^9.0.3",
+      "multer": "^2.4.0",
       "nodemailer": "^7.0.13",
       "postgres": "^3.4.9"
    },
