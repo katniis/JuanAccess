@@ -1,0 +1,1663 @@
+{
+   "info": {
+      "name": "Clinic Backend - Actual DB Verification",
+      "description": "Runs against a disposable local or staging API/database. Collection-level scripts print request input and response output as [IO] records. Full synthetic bodies require io_log_mode=full; secrets are always redacted.",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+   },
+   "event": [
+      {
+         "listen": "prerequest",
+         "script": {
+            "type": "text/javascript",
+            "exec": [
+               "const role = pm.request.headers.get('x-test-role');",
+               "if (role) { const token = pm.variables.get(`${role}_token`); if (token) pm.request.headers.upsert({ key: 'Cookie', value: `token=${token}` }); }"
+            ]
+         }
+      },
+      {
+         "listen": "test",
+         "script": {
+            "type": "text/javascript",
+            "exec": [
+               "const loginRole = /Login patient/i.test(pm.info.requestName) ? 'patient' : /Login staff admin/i.test(pm.info.requestName) ? 'admin' : /Login staff/i.test(pm.info.requestName) ? 'staff' : null;",
+               "const loginCookie = pm.cookies.get('token');",
+               "if (loginRole && loginCookie) pm.environment.set(`${loginRole}_token`, loginCookie);",
+               "const alwaysRedact = /password|token|secret|api[_-]?key|cookie|authorization|service_role|database_url/i;",
+               "const clinicalRedact = /note|justification|appeal|clinical|document|policy|member|dob|phone|email|name/i;",
+               "const mode = pm.environment.get('environment_name') === 'production' ? 'redacted' : pm.environment.get('io_log_mode') === 'full' ? 'full' : 'redacted';",
+               "const scrub = (value) => { if (Array.isArray(value)) return value.map(scrub); if (!value || typeof value !== 'object') return value; return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, (alwaysRedact.test(key) || (mode !== 'full' && clinicalRedact.test(key))) ? '[REDACTED]' : scrub(item)])); };",
+               "const parse = (value) => { try { return JSON.parse(value); } catch { return value; } };",
+               "const expected = String(pm.request.description || '').match(/Expected statuses: ([0-9, ]+)/);",
+               "const expectedCodes = expected ? expected[1].split(',').map((code) => Number(code.trim())) : [200, 201];",
+               "pm.test('HTTP status is expected', () => pm.expect(expectedCodes).to.include(pm.response.code));",
+               "const responseText = pm.response.text();",
+               "const requestBody = pm.request.body ? (pm.request.body.mode === 'raw' ? parse(pm.request.body.raw || '') : '[multipart/form-data]') : null;",
+               "console.log('[IO] ' + JSON.stringify({ testId: pm.info.requestName, timestamp: new Date().toISOString(), role: pm.request.headers.get('x-test-role') || 'public', request: { method: pm.request.method, url: pm.request.url.toString(), body: scrub(requestBody) }, response: { status: pm.response.code, body: scrub(parse(responseText)) }, durationMs: pm.response.responseTime }));",
+               "if (/Poll automatic prior-auth draft/i.test(pm.info.requestName)) { const status = parse(responseText)?.priorAuthorization?.status; const count = Number(pm.environment.get('draft_poll_count') || 0); if (pm.response.code === 200 && status !== 'drafted' && count < 9) { pm.environment.set('draft_poll_count', String(count + 1)); postman.setNextRequest('Poll automatic prior-auth draft'); } else { pm.environment.unset('draft_poll_count'); if (status === 'drafted') pm.test('draft source is Gemini or fallback', () => pm.expect(['gemini', 'fallback']).to.include(parse(responseText)?.priorAuthorization?.generationSource)); } }",
+               "const result = parse(responseText);",
+               "if (result && typeof result === 'object') { if (result.id && /Book appointment/i.test(pm.info.requestName)) pm.environment.set('appointment_id', result.id); if (result.priorAuthorizationId) pm.environment.set('prior_auth_id', result.priorAuthorizationId); if (result.invitation?.id) pm.environment.set('invitation_id', result.invitation.id); if (result.coverage?.id) pm.environment.set('coverage_id', result.coverage.id); if (result.bill?.id) pm.environment.set('bill_id', result.bill.id); }"
+            ]
+         }
+      }
+   ],
+   "variable": [
+      {
+         "key": "base_url",
+         "value": "http://localhost:3000"
+      },
+      {
+         "key": "io_log_mode",
+         "value": "full"
+      }
+   ],
+   "item": [
+      {
+         "name": "Health and authentication",
+         "item": [
+            {
+               "name": "Health",
+               "request": {
+                  "method": "GET",
+                  "header": [],
+                  "description": "Expected statuses: 200",
+                  "url": "{{base_url}}/api/health"
+               }
+            },
+            {
+               "name": "Register patient",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 201, 400, 409",
+                  "url": "{{base_url}}/auth/register",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"{{patient_password}}\",\n   \"first_name\": \"Postman\",\n   \"last_name\": \"Patient\",\n   \"date_of_birth\": \"1990-01-01\",\n   \"gender\": \"female\",\n   \"contact_phone\": \"09170000000\",\n   \"intake_reason_note\": \"Synthetic test patient\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Register duplicate patient",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 400, 409",
+                  "url": "{{base_url}}/auth/register",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"{{patient_password}}\",\n   \"first_name\": \"Postman\",\n   \"last_name\": \"Patient\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Login staff",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/auth/login",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{staff_email}}\",\n   \"password\": \"{{staff_password}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Login staff admin",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/auth/login",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{admin_email}}\",\n   \"password\": \"{{admin_password}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Login patient",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/auth/login",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"{{patient_password}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Login invalid credentials",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 401",
+                  "url": "{{base_url}}/auth/login",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"wrong-password\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Current patient session",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/auth/me"
+               }
+            },
+            {
+               "name": "Logout patient",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/auth/logout"
+               }
+            },
+            {
+               "name": "Accept staff invitation",
+               "request": {
+                  "method": "POST",
+                  "header": [],
+                  "description": "Expected statuses: 201, 400, 404, 409",
+                  "url": "{{base_url}}/auth/accept-invite",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"token\": \"{{invitation_token}}\",\n   \"password\": \"{{staff_password}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Register provider as admin",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/auth/register/provider",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{provider_email}}\",\n   \"password\": \"{{provider_password}}\",\n   \"first_name\": \"Postman\",\n   \"last_name\": \"Provider\",\n   \"specialty\": \"Internal Medicine\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            }
+         ]
+      },
+      {
+         "name": "Appointments and scheduling",
+         "item": [
+            {
+               "name": "List visit types",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 401",
+                  "url": "{{base_url}}/appointment/visit-type"
+               }
+            },
+            {
+               "name": "Get visit type",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/appointment/visit-type/{{visit_type_id}}"
+               }
+            },
+            {
+               "name": "Invalid visit type ID",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 400",
+                  "url": "{{base_url}}/appointment/visit-type/not-an-id"
+               }
+            },
+            {
+               "name": "Search available slots",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400",
+                  "url": "{{base_url}}/appointment/available-slots?visit_type_id={{visit_type_id}}&range_start={{range_start}}&range_end={{range_end}}"
+               }
+            },
+            {
+               "name": "Book appointment requiring prior auth",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 409",
+                  "url": "{{base_url}}/appointment",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"visit_type_id\": \"{{prior_auth_visit_type_id}}\",\n   \"provider_id\": \"{{provider_id}}\",\n   \"start\": \"{{appointment_start}}\",\n   \"end\": \"{{appointment_end}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Book invalid duration",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 400, 409",
+                  "url": "{{base_url}}/appointment",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"visit_type_id\": \"{{visit_type_id}}\",\n   \"provider_id\": \"{{provider_id}}\",\n   \"start\": \"{{appointment_start}}\",\n   \"end\": \"{{invalid_appointment_end}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List patient appointments",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/appointment/mine"
+               }
+            },
+            {
+               "name": "Cancel own appointment",
+               "request": {
+                  "method": "DELETE",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404, 409",
+                  "url": "{{base_url}}/appointment/{{appointment_id}}"
+               }
+            }
+         ]
+      },
+      {
+         "name": "Insurance and coverage",
+         "item": [
+            {
+               "name": "Add patient coverage",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400",
+                  "url": "{{base_url}}/insurance/mine",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"insurer_name\": \"Synthetic Plan\",\n   \"plan_name\": \"Demo Active\",\n   \"policy_number\": \"POSTMAN-SYNTHETIC\",\n   \"member_id\": \"MEMBER-SYNTHETIC\",\n   \"coverage_start\": \"{{coverage_start}}\",\n   \"coverage_end\": \"{{coverage_end}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List my coverage",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/insurance/mine"
+               }
+            },
+            {
+               "name": "Staff reads patient coverage",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/insurance/patients/{{patient_id}}"
+               }
+            },
+            {
+               "name": "Staff simulates active coverage",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/insurance/coverage/{{coverage_id}}/verify",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"active\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Staff simulates inactive coverage",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/insurance/coverage/{{coverage_id}}/verify",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"inactive\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Invalid coverage status",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 400",
+                  "url": "{{base_url}}/insurance/coverage/{{coverage_id}}/verify",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"pending\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            }
+         ]
+      },
+      {
+         "name": "Prior authorization",
+         "item": [
+            {
+               "name": "Patient prior-auth statuses",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/prior-auth/mine"
+               }
+            },
+            {
+               "name": "Staff lists prior-auth rules",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/prior-auth/rules"
+               }
+            },
+            {
+               "name": "Admin creates or updates prior-auth rule",
+               "request": {
+                  "method": "PUT",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 201, 400, 404",
+                  "url": "{{base_url}}/prior-auth/rules",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"visit_type_id\": \"{{prior_auth_visit_type_id}}\",\n   \"insurance_plan_id\": null,\n   \"requires_prior_auth\": true\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Staff reads appointment prior auth",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/prior-auth/appointments/{{appointment_id}}"
+               }
+            },
+            {
+               "name": "Staff reads prior-auth detail",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}"
+               }
+            },
+            {
+               "name": "Poll automatic prior-auth draft",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}"
+               }
+            },
+            {
+               "name": "Basic staff cannot submit prior auth",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 403",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}/submit"
+               }
+            },
+            {
+               "name": "Admin submits prior auth as approved",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 409",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}/submit",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"plan_decision\": \"approved\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Admin submits prior auth as denied",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 409",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}/submit",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"plan_decision\": \"denied\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Admin overrides prior-auth decision",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 409",
+                  "url": "{{base_url}}/staff/prior-auth/{{prior_auth_id}}/decision",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"approved\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Invalid prior-auth transition",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 400, 403, 409",
+                  "url": "{{base_url}}/prior-auth/{{prior_auth_id}}/status",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"approved\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            }
+         ]
+      },
+      {
+         "name": "Waitlist",
+         "item": [
+            {
+               "name": "Join waitlist",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 409",
+                  "url": "{{base_url}}/waitlist",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"visit_type_id\": \"{{visit_type_id}}\",\n   \"preferred_date_start\": \"{{range_start}}\",\n   \"preferred_date_end\": \"{{range_end}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List my waitlist",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/waitlist/mine"
+               }
+            },
+            {
+               "name": "Cancel waitlist entry",
+               "request": {
+                  "method": "DELETE",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404, 409",
+                  "url": "{{base_url}}/waitlist/{{waitlist_id}}"
+               }
+            },
+            {
+               "name": "Confirm waitlist offer",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404, 409",
+                  "url": "{{base_url}}/waitlist/{{waitlist_id}}/confirm"
+               }
+            },
+            {
+               "name": "Decline waitlist offer",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404, 409",
+                  "url": "{{base_url}}/waitlist/{{waitlist_id}}/decline"
+               }
+            }
+         ]
+      },
+      {
+         "name": "Billing and documents",
+         "item": [
+            {
+               "name": "OCR JSON fallback or Gemini",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 403",
+                  "url": "{{base_url}}/bills/ocr",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"document_base64\": \"{{bill_base64}}\",\n   \"mime_type\": \"application/pdf\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Upload bill PDF",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 413, 503",
+                  "url": "{{base_url}}/bills/upload",
+                  "body": {
+                     "mode": "formdata",
+                     "formdata": [
+                        {
+                           "key": "file",
+                           "type": "file",
+                           "src": "{{bill_file}}"
+                        }
+                     ]
+                  }
+               }
+            },
+            {
+               "name": "Create reviewed bill",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 404",
+                  "url": "{{base_url}}/bills",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"appointment_id\": \"{{appointment_id}}\",\n   \"uploaded_file_url\": \"{{uploaded_file_url}}\",\n   \"line_items\": [\n      {\n         \"procedure_code\": \"93000\",\n         \"description\": \"Resting ECG\",\n         \"amount\": 500\n      }\n   ]\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List my bills",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/bills/mine"
+               }
+            },
+            {
+               "name": "Get my bill",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403, 404",
+                  "url": "{{base_url}}/bills/{{bill_id}}"
+               }
+            },
+            {
+               "name": "Explain my bill",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403, 404",
+                  "url": "{{base_url}}/bills/{{bill_id}}/explanation"
+               }
+            },
+            {
+               "name": "Edit dispute letter",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/bills/{{bill_id}}/dispute-letter",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"letter_text\": \"Synthetic review request.\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Mark dispute downloaded",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/bills/{{bill_id}}/dispute-letter/downloaded"
+               }
+            }
+         ]
+      },
+      {
+         "name": "Notifications",
+         "item": [
+            {
+               "name": "List my notifications",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/notifications/mine"
+               }
+            },
+            {
+               "name": "Mark notification read",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "patient"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/notifications/{{notification_id}}/read"
+               }
+            },
+            {
+               "name": "Process pending emails",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/notifications/process-email"
+               }
+            },
+            {
+               "name": "SMTP delivery status",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/notifications/email/status"
+               }
+            }
+         ]
+      },
+      {
+         "name": "Staff operations",
+         "item": [
+            {
+               "name": "Staff dashboard",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/dashboard"
+               }
+            },
+            {
+               "name": "Search doctors",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 200",
+                  "url": "{{base_url}}/staff/doctors?search="
+               }
+            },
+            {
+               "name": "Doctor schedule",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404",
+                  "url": "{{base_url}}/staff/doctors/{{provider_id}}/schedule?date={{range_start}}"
+               }
+            },
+            {
+               "name": "Search patients",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/patients?search="
+               }
+            },
+            {
+               "name": "Patient detail",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/patients/{{patient_id}}"
+               }
+            },
+            {
+               "name": "Appointment pre-visit data",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/appointments/{{appointment_id}}/pre-visit-data"
+               }
+            },
+            {
+               "name": "Appointment procedures",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/appointments/{{appointment_id}}/procedures"
+               }
+            },
+            {
+               "name": "Record performed procedure",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 404",
+                  "url": "{{base_url}}/staff/appointments/{{appointment_id}}/procedures",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"procedure_code\": \"93000\",\n   \"description\": \"Synthetic ECG\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Staff disputes",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/disputes"
+               }
+            },
+            {
+               "name": "Staff fee schedule",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/fee-schedule"
+               }
+            },
+            {
+               "name": "Slot utilization",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400",
+                  "url": "{{base_url}}/staff/slots/utilization?date={{range_start}}"
+               }
+            },
+            {
+               "name": "Staff cancel appointment",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404, 409",
+                  "url": "{{base_url}}/staff/appointments/{{appointment_id}}/cancel"
+               }
+            },
+            {
+               "name": "Staff reschedule appointment",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404, 409",
+                  "url": "{{base_url}}/staff/appointments/{{appointment_id}}/reschedule",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"start\": \"{{appointment_start}}\",\n   \"end\": \"{{appointment_end}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Waitlist monitor",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/waitlist?status=waiting"
+               }
+            },
+            {
+               "name": "Prior-auth queue",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/prior-auth?status=needs_draft"
+               }
+            },
+            {
+               "name": "Appeals queue",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/appeals?status=all"
+               }
+            },
+            {
+               "name": "Appeal detail",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 404",
+                  "url": "{{base_url}}/staff/appeals/{{appeal_id}}"
+               }
+            },
+            {
+               "name": "Create appeal draft",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 409",
+                  "url": "{{base_url}}/staff/appeals",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"prior_authorization_id\": \"{{prior_auth_id}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Update appeal draft",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 404, 409",
+                  "url": "{{base_url}}/staff/appeals/{{appeal_id}}",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"appeal_letter_text\": \"Synthetic appeal draft.\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Submit appeal",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 403, 409",
+                  "url": "{{base_url}}/staff/appeals/{{appeal_id}}/submit",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"mock_outcome\": \"approved\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Appeal decision override",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 403, 409",
+                  "url": "{{base_url}}/staff/appeals/{{appeal_id}}/decision",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"status\": \"denied\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List clinical guidelines",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/guidelines"
+               }
+            },
+            {
+               "name": "Create clinical guideline",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403",
+                  "url": "{{base_url}}/staff/guidelines",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"title\": \"Postman synthetic guideline\",\n   \"excerpt_text\": \"Synthetic test excerpt.\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List unverified coverage",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "staff"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/insurance/unverified"
+               }
+            },
+            {
+               "name": "List admin users",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/admin/users"
+               }
+            },
+            {
+               "name": "Create staff invitation",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 409",
+                  "url": "{{base_url}}/staff/admin/invitations",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"email\": \"{{invite_email}}\",\n   \"role\": \"staff\",\n   \"first_name\": \"Invited\",\n   \"last_name\": \"User\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Update admin user",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 403, 404",
+                  "url": "{{base_url}}/staff/admin/users/{{user_id}}",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"is_active\": false\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Update provider",
+               "request": {
+                  "method": "PATCH",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 400, 403, 404",
+                  "url": "{{base_url}}/staff/admin/providers/{{provider_id}}",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"specialty\": \"Internal Medicine\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "List admin reference data",
+               "request": {
+                  "method": "GET",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403",
+                  "url": "{{base_url}}/staff/admin/reference-data"
+               }
+            },
+            {
+               "name": "Create room reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/rooms",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"name\": \"Postman Room\",\n   \"roomType\": \"exam\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Create equipment reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/equipment",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"name\": \"Postman Equipment\",\n   \"equipmentType\": \"diagnostic\",\n   \"roomId\": \"{{room_id}}\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Create visit type reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/visit-types",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"name\": \"Postman Visit\",\n   \"durationMinutes\": 30,\n   \"requiredSpecialty\": \"Internal Medicine\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Create insurance-plan reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/insurance-plans",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"payerName\": \"Postman Payer\",\n   \"planName\": \"Postman Plan\",\n   \"planType\": \"demo\",\n   \"coveragePct\": \"80.00\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Create availability reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/availability",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"providerId\": \"{{provider_id}}\",\n   \"dayOfWeek\": 1,\n   \"startTime\": \"09:00\",\n   \"endTime\": \"17:00\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Create fee-schedule reference",
+               "request": {
+                  "method": "POST",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 201, 400, 403, 409",
+                  "url": "{{base_url}}/staff/admin/reference/fee-schedule",
+                  "body": {
+                     "mode": "raw",
+                     "raw": "{\n   \"procedureCode\": \"POSTMAN-001\",\n   \"description\": \"Synthetic procedure\",\n   \"standardCost\": \"100.00\"\n}",
+                     "options": {
+                        "raw": {
+                           "language": "json"
+                        }
+                     }
+                  }
+               }
+            },
+            {
+               "name": "Delete reference record",
+               "request": {
+                  "method": "DELETE",
+                  "header": [
+                     {
+                        "key": "x-test-role",
+                        "value": "admin"
+                     }
+                  ],
+                  "description": "Expected statuses: 200, 403, 404, 409",
+                  "url": "{{base_url}}/staff/admin/reference/rooms/{{room_id}}"
+               }
+            }
+         ]
+      }
+   ]
+}
