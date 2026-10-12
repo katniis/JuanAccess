@@ -5,13 +5,13 @@
 - API: `http://localhost:3000`
 - Runner: Postman web Agent Mode through the connected Postman Desktop Agent
 - Collection: `Aceso` in Sha Chi's Workspace
-- Database: configured project database; no patient or credential records were used
+- Database: configured project database; one disposable synthetic patient was created for the authenticated run and removed after verification
 - I/O mode: full synthetic request/response output was visible in the Postman agent; no secrets or patient data were sent
 
 ## Results
 
-- Requests executed: 12 (1 health smoke request, 5 saved Aceso requests with inferred paths, 4 corrected route checks, and 2 validation checks)
-- Passed: 8 route/behavior checks; 4 saved requests exposed a URL configuration problem
+- Requests executed: 17 visible checks (the original 12 plus five authenticated Aceso requests)
+- Passed: 13 route/behavior checks; 4 saved requests exposed a URL configuration problem
 - Failed: 0 server failures; the 5 saved requests have blank URLs and their inferred `/api` paths returned expected `404`s
 - Visible Postman verbose input/output: confirmed for every request below
 
@@ -32,17 +32,33 @@
 |  11 | `POST http://localhost:3000/auth/login`, `Content-Type: application/json`, body `{}`                                                   | `400`; `{"message":"Email and password are required."}` | Pass: input validation                       |
 |  12 | `POST http://localhost:3000/appointment`, `Content-Type: application/json`, body `{}`, no `Authorization` header                       | `401`; `{"message":"Not authorized: no token."}`        | Pass: auth checked before booking validation |
 
-The Postman agent displayed the request URL, query/body input, status, selected response headers, and response body for the corrected route and validation checks. All request bodies were `{}` or no body. No bearer token was generated or logged.
+The Postman agent displayed the request URL, query/body input, status, selected response headers, and response body for the corrected route and validation checks. All request bodies were `{}` or no body. Tokens were redacted in this file.
+
+### Authenticated Aceso run
+
+The agent created one disposable synthetic patient and reused its HttpOnly cookie for these requests. The displayed results were:
+
+| Request input                                                                                                  | Response output                                                | Result |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------ |
+| `POST /auth/register` with synthetic registration JSON                                                         | `201 Created`; user/patient created and HttpOnly cookie issued | Pass   |
+| `GET /auth/me` with the cookie                                                                                 | `200 OK`; patient identity returned                            | Pass   |
+| `GET /appointment/visit-type` with the cookie                                                                  | `200 OK`; 14 visit types returned                              | Pass   |
+| `GET /appointment/available-slots?visit_type_id=1&range_start=2026-10-13&range_end=2026-10-14` with the cookie | `200 OK`; 22 available slots returned                          | Pass   |
+| `GET /appointment/mine` with the cookie                                                                        | `200 OK`; empty list for a new patient                         | Pass   |
+
+The same paths without a cookie returned `401` with `{"message":"Not authorized: no token."}`. No Aceso collection item was modified.
 
 ## Booking automation
 
 - Jest chart-aware fallback test: passed
-- Booking-to-draft Postman scenario: not run against this database because it would require creating or using a patient identity and appointment row
+- Booking-to-draft through the Aceso agent: not completed because the Postman Agent exhausted its AI-credit allowance after the authenticated run
+- Supplemental local HTTP booking check (same disposable patient, synthetic PhilHealth Standard coverage, MRI Knee slot): `POST /insurance/mine` → `201` (`unverified`), `POST /appointment` → `201` (`priorAuthorizationStatus: needs_draft`), then `GET /prior-auth/mine` polled to `drafted`; the draft contained 313 characters and was deterministic fallback text, and `prior_authorization_draft_ready` was added alongside `appointment_created`
 - Full repository collection: available at `tools/postman/backend.postman_collection.json`, but this run intentionally used the user's `Aceso` collection
 
 ## Safety checks
 
-- No patient rows created, deleted, or modified by this run.
+- The temporary synthetic user, patient, coverage, appointment, prior authorization, notifications, summaries, and audit rows were deleted after the run. Final counts: `users=0`, `patients=0`, `appointments=0`, `prior_authorizations=0`, `notifications=0`, `patient_coverage=0`, `audit_log=0`.
+- Operational reference data remained intact (`visit_types=14`, `providers=7`).
 - Write-heavy collection runs must use a disposable local or staging database.
 - Secrets, cookies, document bytes, and unrestricted clinical text are redacted by the collection logger.
-- Aceso currently contains five saved requests with empty URL fields, so it cannot by itself run authenticated booking or verify the post-booking prior-authorization draft automation.
+- Aceso currently contains five saved requests with empty URL fields. The agent can run ad-hoc requests with the correct paths, but saved collection items need URLs before they can be used as a repeatable full suite.
