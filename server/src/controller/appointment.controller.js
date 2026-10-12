@@ -14,6 +14,7 @@ import {
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 import { createPriorAuthorizationForAppointment } from '../services/prior-auth.service.js';
+import { notifyPatient } from '../services/notification.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -419,6 +420,12 @@ export const createAppointment = async (req, res) => {
             await tx.insert(preVisitSummaries).values({
                appointmentId: created.id,
             });
+            await notifyPatient(
+               tx,
+               req.user.patientId,
+               'appointment_created',
+               'Your appointment was booked successfully.',
+            );
             return { appointment: created, priorAuthorization };
          },
          { isolationLevel: 'serializable' },
@@ -518,6 +525,13 @@ export const cancelAppointment = async (req, res) => {
             if (!updated) {
                return false;
             }
+
+            await notifyPatient(
+               tx,
+               appointment.patientId,
+               'appointment_cancelled',
+               'Your appointment was cancelled.',
+            );
 
             const [waitlistOffer] = await tx
                .select({ id: waitlistEntries.id })

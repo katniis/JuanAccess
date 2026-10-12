@@ -35,6 +35,7 @@ import {
 import { offerNextWaitlistEntry } from './waitlist.service.js';
 import { buildPreVisitPrompt, generateGeminiDraft } from './gemini.service.js';
 import { recordAudit } from './audit.service.js';
+import { notifyPatient } from './notification.service.js';
 import {
    manilaDateBounds,
    manilaDateString,
@@ -652,6 +653,13 @@ export async function staffCancelAppointment(appointmentId) {
 
          if (!updated) return null;
 
+         await notifyPatient(
+            tx,
+            appointment.patientId,
+            'appointment_cancelled',
+            'Your appointment was cancelled by clinic staff.',
+         );
+
          // Cancel any pending waitlist offer on this appointment
          const [waitlistOffer] = await tx
             .select({ id: waitlistEntries.id })
@@ -816,6 +824,13 @@ export async function staffRescheduleAppointment(
             .returning();
 
          if (!updated) return { error: 'not_found' };
+
+         await notifyPatient(
+            tx,
+            appointment.patientId,
+            'appointment_rescheduled',
+            'Your appointment was rescheduled by clinic staff.',
+         );
 
          // Cancel any pending waitlist offer on this appointment
          const [waitlistOffer] = await tx

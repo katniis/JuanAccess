@@ -1,5 +1,6 @@
 import {
    listNotifications,
+   getEmailDeliveryStatus,
    markNotificationRead,
    sendPendingNotificationEmails,
 } from '../services/notification.service.js';
@@ -42,5 +43,20 @@ export async function processNotificationEmails(req, res) {
       return res
          .status(500)
          .json({ error: 'Failed to process notification emails' });
+   }
+}
+
+export async function getNotificationEmailStatus(req, res) {
+   if (req.user.role !== 'staff_admin')
+      return res
+         .status(403)
+         .json({ error: 'Staff administrator access required' });
+   try {
+      return res.json(await getEmailDeliveryStatus());
+   } catch (error) {
+      console.error('Failed to fetch notification email status:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to fetch notification email status' });
    }
 }

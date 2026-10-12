@@ -9,6 +9,8 @@ import {
    proceduresPerformed,
 } from '../db/schema/index.js';
 import { generateGeminiDraft } from './gemini.service.js';
+import { createBillSignedUrl } from './bill-storage.service.js';
+import { notifyPatient } from './notification.service.js';
 
 const money = (value) => Number(value);
 
@@ -36,7 +38,14 @@ async function getBillWithChildren(tx, billId, patientId = null) {
          .limit(1),
    ]);
 
-   return { ...bill, lineItems, disputeLetter: dispute[0] ?? null };
+   return {
+      ...bill,
+      uploadedFileUrl:
+         (await createBillSignedUrl(bill.uploadedFileUrl, bill.patientId)) ||
+         bill.uploadedFileUrl,
+      lineItems,
+      disputeLetter: dispute[0] ?? null,
+   };
 }
 
 function flagLineItem(lineItem, performedCounts, billedCounts, fees) {
@@ -166,6 +175,12 @@ export async function createBill({
          await tx
             .insert(disputeLetters)
             .values({ billId: bill.id, letterText });
+         await notifyPatient(
+            tx,
+            patientId,
+            'dispute_letter_available',
+            'Your bill dispute letter is ready to review.',
+         );
       }
 
       return { billId: bill.id, status };

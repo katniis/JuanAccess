@@ -4,11 +4,10 @@ import {
    appointments,
    preVisitSummaries,
    providers,
-   users,
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
-import { insertNotification } from './notification.service.js';
+import { notifyPatient } from './notification.service.js';
 import { getCoverageStatusForAppointment } from './insurance.service.js';
 import { createPriorAuthorizationForAppointment } from './prior-auth.service.js';
 
@@ -222,6 +221,16 @@ export async function closeOffer(entryId, outcome, patientId = undefined) {
             .update(waitlistEntries)
             .set({ status: outcome, offerExpiresAt: null })
             .where(eq(waitlistEntries.id, entry.id));
+         await notifyPatient(
+            tx,
+            entry.patientId,
+            outcome === 'expired'
+               ? 'waitlist_offer_expired'
+               : 'waitlist_offer_closed',
+            outcome === 'expired'
+               ? 'Your waitlist offer expired before it was confirmed.'
+               : 'Your waitlist offer was closed.',
+         );
          if (freedAppointment) {
             await offerNextWaitlistEntry(tx, freedAppointment);
          }
@@ -276,17 +285,6 @@ export async function confirmOffer(entryId, patientId) {
       },
       { isolationLevel: 'serializable' },
    );
-}
-
-async function notifyPatient(tx, patientId, type, message) {
-   const [user] = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.patientId, patientId), eq(users.role, 'patient')))
-      .limit(1);
-   if (user) {
-      await insertNotification(tx, { userId: user.id, type, message });
-   }
 }
 
 function normalizeSpecialty(value) {
