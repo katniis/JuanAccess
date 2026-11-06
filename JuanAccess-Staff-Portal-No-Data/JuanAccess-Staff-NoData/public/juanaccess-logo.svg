@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" role="img" aria-labelledby="juanaccess-logo-title">
+  <title id="juanaccess-logo-title">JuanAccess</title>
+  <rect width="64" height="64" rx="16" fill="#0E7490"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 14V38A8 8 0 0 1 24 46"/>
+    <path d="M20 26H44"/>
+  </g>
+  <text x="80" y="43" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="32">
+    <tspan fill="#0F172A" font-weight="700">Juan</tspan><tspan fill="#0E7490" font-weight="400">Access</tspan>
+  </text>
+</svg>
