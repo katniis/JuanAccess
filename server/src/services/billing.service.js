@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    appointments,
@@ -6,10 +6,11 @@ import {
    bills,
    disputeLetters,
    feeSchedule,
+   patients,
    proceduresPerformed,
 } from '../db/schema/index.js';
-import { generateGeminiDraft } from './gemini.service.js';
-import { createBillSignedUrl } from './bill-storage.service.js';
+import { explainBillLineItems } from './gemini.service.js';
+import { createBillSignedUrl, deleteBillFile } from './bill-storage.service.js';
 import { notifyPatient } from './notification.service.js';
 
 const money = (value) => Number(value);
@@ -202,16 +203,52 @@ export async function getPatientBill(patientId, billId) {
    return getBillWithChildren(db, billId, patientId);
 }
 
+export async function deletePatientBill(patientId, billId) {
+   return db.transaction(async (tx) => {
+      const [bill] = await tx
+         .select({
+            id: bills.id,
+            uploadedFileUrl: bills.uploadedFileUrl,
+         })
+         .from(bills)
+         .where(and(eq(bills.id, billId), eq(bills.patientId, patientId)))
+         .limit(1)
+         .for('update');
+      if (!bill) return { error: 'Bill not found', status: 404 };
+
+      const [dispute] = await tx
+         .select({
+            id: disputeLetters.id,
+            submittedAt: disputeLetters.submittedAt,
+         })
+         .from(disputeLetters)
+         .where(eq(disputeLetters.billId, billId))
+         .limit(1)
+         .for('update');
+      if (dispute?.submittedAt) {
+         return {
+            error: 'A bill with a dispute submitted to clinic staff cannot be deleted',
+            status: 409,
+         };
+      }
+
+      if (dispute) {
+         await tx
+            .delete(disputeLetters)
+            .where(eq(disputeLetters.id, dispute.id));
+      }
+      await tx.delete(billLineItems).where(eq(billLineItems.billId, billId));
+      await tx.delete(bills).where(eq(bills.id, billId));
+      await deleteBillFile(bill.uploadedFileUrl, patientId);
+
+      return { deleted: true };
+   });
+}
+
 export async function explainPatientBill(patientId, billId) {
    const bill = await getPatientBill(patientId, billId);
    if (!bill) return null;
-   const fallback = bill.lineItems.length
-      ? `This bill contains ${bill.lineItems.length} charge(s). Review each amount against the clinic fee schedule and contact billing about any flagged item.`
-      : 'This bill has no itemized charges yet. Contact billing for an itemized statement.';
-   return generateGeminiDraft({
-      prompt: `Explain this medical bill in plain language for the patient. Do not give legal or coverage advice and do not change any amounts. Bill status: ${bill.status}. Line items: ${JSON.stringify(bill.lineItems.map((item) => ({ description: item.description, amount: item.amount, flagged: item.isFlagged, reason: item.flagReason })))}.`,
-      fallback,
-   });
+   return explainBillLineItems(bill.lineItems);
 }
 
 export async function updatePatientDisputeLetter(
@@ -221,12 +258,55 @@ export async function updatePatientDisputeLetter(
 ) {
    const bill = await getPatientBill(patientId, billId);
    if (!bill?.disputeLetter) return null;
+   if (bill.disputeLetter.submittedAt) {
+      return {
+         error: 'A submitted dispute letter can no longer be edited',
+         status: 409,
+      };
+   }
    const [updated] = await db
       .update(disputeLetters)
       .set({ letterText, patientEdited: true })
-      .where(eq(disputeLetters.id, bill.disputeLetter.id))
+      .where(
+         and(
+            eq(disputeLetters.id, bill.disputeLetter.id),
+            isNull(disputeLetters.submittedAt),
+         ),
+      )
       .returning();
-   return updated;
+   return (
+      updated || {
+         error: 'A submitted dispute letter can no longer be edited',
+         status: 409,
+      }
+   );
+}
+
+export async function submitPatientDisputeLetter(patientId, billId) {
+   const bill = await getPatientBill(patientId, billId);
+   if (!bill?.disputeLetter) return null;
+   if (!bill.disputeLetter.letterText.trim()) {
+      return {
+         error: 'A dispute letter cannot be submitted while it is empty',
+         status: 409,
+      };
+   }
+   if (bill.disputeLetter.submittedAt) return bill.disputeLetter;
+
+   const [submitted] = await db
+      .update(disputeLetters)
+      .set({ submittedAt: new Date() })
+      .where(
+         and(
+            eq(disputeLetters.id, bill.disputeLetter.id),
+            isNull(disputeLetters.submittedAt),
+         ),
+      )
+      .returning();
+   if (submitted) return submitted;
+
+   const refreshedBill = await getPatientBill(patientId, billId);
+   return refreshedBill?.disputeLetter || null;
 }
 
 export async function markDisputeDownloaded(patientId, billId) {
@@ -242,11 +322,102 @@ export async function markDisputeDownloaded(patientId, billId) {
 
 export async function listDisputes() {
    const rows = await db
+      .select({
+         id: bills.id,
+         patientFirstName: patients.firstName,
+         patientLastName: patients.lastName,
+         billDate: bills.uploadDate,
+         submittedAt: disputeLetters.submittedAt,
+         letterText: disputeLetters.letterText,
+      })
+      .from(disputeLetters)
+      .innerJoin(bills, eq(bills.id, disputeLetters.billId))
+      .innerJoin(patients, eq(patients.id, bills.patientId))
+      .where(isNotNull(disputeLetters.submittedAt))
+      .orderBy(desc(disputeLetters.submittedAt));
+   const lineItems = rows.length
+      ? await db
+           .select()
+           .from(billLineItems)
+           .where(
+              inArray(
+                 billLineItems.billId,
+                 rows.map((row) => row.id),
+              ),
+           )
+           .orderBy(asc(billLineItems.id))
+      : [];
+   const itemsByBill = new Map();
+   for (const item of lineItems) {
+      const items = itemsByBill.get(item.billId) || [];
+      items.push(item);
+      itemsByBill.set(item.billId, items);
+   }
+   return rows.map((row) => toStaffDispute(row, itemsByBill.get(row.id) || []));
+}
+
+export async function getSubmittedDispute(billId) {
+   const [row] = await db
+      .select({
+         id: bills.id,
+         patientFirstName: patients.firstName,
+         patientLastName: patients.lastName,
+         billDate: bills.uploadDate,
+         submittedAt: disputeLetters.submittedAt,
+         letterText: disputeLetters.letterText,
+      })
+      .from(disputeLetters)
+      .innerJoin(bills, eq(bills.id, disputeLetters.billId))
+      .innerJoin(patients, eq(patients.id, bills.patientId))
+      .where(and(eq(bills.id, billId), isNotNull(disputeLetters.submittedAt)))
+      .limit(1);
+   if (!row) return null;
+   const lineItems = await db
       .select()
-      .from(bills)
-      .where(eq(bills.status, 'disputed'))
-      .orderBy(desc(bills.uploadDate));
-   return Promise.all(rows.map((bill) => getBillWithChildren(db, bill.id)));
+      .from(billLineItems)
+      .where(eq(billLineItems.billId, billId))
+      .orderBy(asc(billLineItems.id));
+   return toStaffDispute(row, lineItems);
+}
+
+function toStaffDispute(record, lineItems) {
+   const issueLabels = [
+      ...new Set(
+         lineItems.flatMap((item) =>
+            item.flagReason
+               ? item.flagReason.split('; ').map(labelDisputeIssue)
+               : [],
+         ),
+      ),
+   ];
+   return {
+      id: record.id,
+      patient: `${record.patientFirstName} ${record.patientLastName}`,
+      billDate: record.billDate,
+      submittedAt: record.submittedAt,
+      status: 'Submitted',
+      flaggedIssues: issueLabels,
+      lineItems: lineItems.map((item) => ({
+         id: item.id,
+         code: item.procedureCode || '—',
+         description: item.description || 'Unidentified charge',
+         billed: Number(item.amount),
+         flag: item.flagReason
+            ? labelDisputeIssue(item.flagReason.split('; ')[0])
+            : '',
+         flagReason: item.flagReason,
+      })),
+      letter: record.letterText,
+   };
+}
+
+function labelDisputeIssue(reason) {
+   const normalized = reason.toLowerCase();
+   if (normalized.includes('duplicate')) return 'Duplicate';
+   if (normalized.includes('missing procedure code')) return 'Coding Error';
+   if (normalized.includes('not performed')) return 'Not Performed';
+   if (normalized.includes('fee schedule')) return 'Overcharge';
+   return 'Review Needed';
 }
 
 export async function listFeeSchedule() {

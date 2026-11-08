@@ -505,6 +505,9 @@ export const cancelAppointment = async (req, res) => {
    if (!Number.isInteger(id) || id < 1) {
       return res.status(400).json({ error: 'Invalid appointment ID' });
    }
+   if (req.user?.role === 'patient' && !req.user.patientId) {
+      return res.status(403).json({ error: 'Patient account is not linked' });
+   }
    try {
       const cancelled = await db.transaction(
          async (tx) => {
@@ -526,12 +529,7 @@ export const cancelAppointment = async (req, res) => {
             const [updated] = await tx
                .update(appointments)
                .set({ status: 'cancelled', updatedAt: new Date() })
-               .where(
-                  and(
-                     eq(appointments.id, id),
-                     eq(appointments.status, 'scheduled'),
-                  ),
-               )
+               .where(and(...conditions))
                .returning({ id: appointments.id });
             if (!updated) {
                return false;

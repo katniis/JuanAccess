@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    appointments,
@@ -56,6 +56,33 @@ export const joinWaitlist = async (req, res) => {
          if (!provider) {
             return res.status(404).json({ error: 'Provider not found' });
          }
+      }
+      const [activeEntry] = await db
+         .select({ id: waitlistEntries.id })
+         .from(waitlistEntries)
+         .where(
+            and(
+               eq(waitlistEntries.patientId, req.user.patientId),
+               providerId === undefined || providerId === null
+                  ? isNull(waitlistEntries.providerId)
+                  : eq(waitlistEntries.providerId, Number(providerId)),
+               eq(waitlistEntries.visitTypeId, Number(visitTypeId)),
+               eq(waitlistEntries.preferredDateStart, dateStart),
+               eq(waitlistEntries.preferredDateEnd, dateEnd),
+               timeStart
+                  ? eq(waitlistEntries.preferredTimeStart, timeStart)
+                  : isNull(waitlistEntries.preferredTimeStart),
+               timeEnd
+                  ? eq(waitlistEntries.preferredTimeEnd, timeEnd)
+                  : isNull(waitlistEntries.preferredTimeEnd),
+               inArray(waitlistEntries.status, ['waiting', 'offered']),
+            ),
+         )
+         .limit(1);
+      if (activeEntry) {
+         return res.status(409).json({
+            error: 'An active waitlist entry already matches these criteria.',
+         });
       }
       const [entry] = await db
          .insert(waitlistEntries)

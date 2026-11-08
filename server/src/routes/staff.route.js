@@ -10,6 +10,7 @@ import {
    getAppointmentProcedures,
    createAppointmentProcedure,
    getStaffDisputes,
+   getStaffDisputeDetail,
    getStaffFeeSchedule,
    getDashboard,
    getDoctorScheduleHandler,
@@ -59,6 +60,7 @@ router.get('/appointments/:id/pre-visit-data', getAppointmentPreVisitData);
 router.get('/appointments/:id/procedures', getAppointmentProcedures);
 router.post('/appointments/:id/procedures', createAppointmentProcedure);
 router.get('/disputes', getStaffDisputes);
+router.get('/disputes/:id', getStaffDisputeDetail);
 router.get('/fee-schedule', getStaffFeeSchedule);
 
 // 2. Slots & Utilization

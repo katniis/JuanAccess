@@ -16,7 +16,9 @@ const signedUrlSeconds = 5 * 60;
 
 function getConfig() {
    const url = process.env.SUPABASE_URL?.trim();
-   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+   const key =
+      process.env.SUPABASE_SECRET_KEY?.trim() ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
    if (!url || !key) return null;
    return {
       url,
@@ -60,6 +62,13 @@ export class BillStorageNotConfiguredError extends Error {
    }
 }
 
+export class BillStorageDeletionError extends Error {
+   constructor() {
+      super('The uploaded bill file could not be removed');
+      this.name = 'BillStorageDeletionError';
+   }
+}
+
 export async function uploadBillFile({ patientId, file }) {
    if (!isSupportedBillMimeType(file.mimetype)) {
       throw new Error('Unsupported bill file type');
@@ -92,4 +101,23 @@ export async function createBillSignedUrl(path, patientId) {
       .createSignedUrl(path, signedUrlSeconds);
    if (error) return null;
    return data?.signedUrl || null;
+}
+
+export async function deleteBillFile(path, patientId) {
+   if (
+      typeof path !== 'string' ||
+      !path.startsWith(`patients/${patientId}/bills/`)
+   ) {
+      return;
+   }
+   if (!isPatientBillPath(path, patientId)) {
+      throw new BillStorageDeletionError();
+   }
+   const config = getConfig();
+   if (!config) throw new BillStorageNotConfiguredError();
+
+   const { error } = await getClient(config)
+      .storage.from(config.bucket)
+      .remove([path]);
+   if (error) throw new BillStorageDeletionError();
 }

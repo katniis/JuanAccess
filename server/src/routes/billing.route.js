@@ -2,12 +2,14 @@ import express from 'express';
 import multer from 'multer';
 import {
    createPatientBill,
+   deleteMyBill,
    editMyDisputeLetter,
    extractMyBillLineItems,
    getMyBill,
    getMyBills,
    explainMyBill,
    markMyDisputeDownloaded,
+   submitMyDisputeLetter,
    uploadPatientBill,
 } from '../controller/billing.controller.js';
 import { BILL_MAX_BYTES } from '../services/bill-storage.service.js';
@@ -37,9 +39,11 @@ router.post('/upload', parseBillUpload, uploadPatientBill);
 router.post('/', createPatientBill);
 router.post('/ocr', extractMyBillLineItems);
 router.get('/mine', getMyBills);
+router.delete('/:id', deleteMyBill);
 router.get('/:id', getMyBill);
 router.get('/:id/explanation', explainMyBill);
 router.patch('/:id/dispute-letter', editMyDisputeLetter);
+router.post('/:id/dispute-letter/submit', submitMyDisputeLetter);
 router.post('/:id/dispute-letter/downloaded', markMyDisputeDownloaded);
 
 export default router;

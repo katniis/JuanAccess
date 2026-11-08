@@ -1,13 +1,16 @@
 import {
    createBill,
+   deletePatientBill,
    getPatientBill,
    explainPatientBill,
    listPatientBills,
    markDisputeDownloaded,
+   submitPatientDisputeLetter,
    updatePatientDisputeLetter,
 } from '../services/billing.service.js';
 import { extractBillLineItems } from '../services/gemini.service.js';
 import {
+   BillStorageDeletionError,
    BillStorageNotConfiguredError,
    createBillSignedUrl,
    isPatientBillPath,
@@ -27,13 +30,16 @@ export const uploadPatientBill = async (req, res) => {
 
    try {
       const stored = await uploadBillFile({ patientId: id, file: req.file });
-      const extracted = await extractBillLineItems({
-         documentBase64: req.file.buffer.toString('base64'),
-         mimeType: req.file.mimetype,
-      });
+      const [extracted, previewUrl] = await Promise.all([
+         extractBillLineItems({
+            documentBase64: req.file.buffer.toString('base64'),
+            mimeType: req.file.mimetype,
+         }),
+         createBillSignedUrl(stored.path, id),
+      ]);
       return res.status(201).json({
          uploadedFileUrl: stored.path,
-         previewUrl: await createBillSignedUrl(stored.path, id),
+         previewUrl,
          ...extracted,
       });
    } catch (error) {
@@ -180,6 +186,34 @@ export const getMyBill = async (req, res) => {
    }
 };
 
+export const deleteMyBill = async (req, res) => {
+   const id = patientId(req);
+   const billId = Number(req.params.id);
+   if (!id) return res.status(403).json({ error: 'Patient access required' });
+   if (!Number.isInteger(billId) || billId < 1)
+      return res.status(400).json({ error: 'Invalid bill ID' });
+
+   try {
+      const result = await deletePatientBill(id, billId);
+      if (result.error)
+         return res.status(result.status).json({ error: result.error });
+      return res.json({ message: 'Bill deleted' });
+   } catch (error) {
+      if (error instanceof BillStorageNotConfiguredError) {
+         return res.status(503).json({
+            error: 'Bill storage is not configured. The bill was not deleted.',
+         });
+      }
+      if (error instanceof BillStorageDeletionError) {
+         return res.status(503).json({
+            error: 'The uploaded file could not be removed. The bill was not deleted.',
+         });
+      }
+      console.error('Failed to delete patient bill:', error);
+      return res.status(500).json({ error: 'Failed to delete bill' });
+   }
+};
+
 export const explainMyBill = async (req, res) => {
    const id = patientId(req);
    const billId = Number(req.params.id);
@@ -205,21 +239,45 @@ export const editMyDisputeLetter = async (req, res) => {
    if (
       !Number.isInteger(billId) ||
       billId < 1 ||
-      typeof letterText !== 'string'
+      typeof letterText !== 'string' ||
+      !letterText.trim()
    )
-      return res.status(400).json({ error: 'Valid letter_text is required' });
+      return res
+         .status(400)
+         .json({ error: 'A non-empty letter_text is required' });
    try {
       const letter = await updatePatientDisputeLetter(
          id,
          billId,
          letterText.trim(),
       );
+      if (letter?.error)
+         return res.status(letter.status).json({ error: letter.error });
       return letter
          ? res.json(letter)
          : res.status(404).json({ error: 'Dispute letter not found' });
    } catch (error) {
       console.error('Failed to update dispute letter:', error);
       return res.status(500).json({ error: 'Failed to update dispute letter' });
+   }
+};
+
+export const submitMyDisputeLetter = async (req, res) => {
+   const id = patientId(req);
+   const billId = Number(req.params.id);
+   if (!id) return res.status(403).json({ error: 'Patient access required' });
+   if (!Number.isInteger(billId) || billId < 1)
+      return res.status(400).json({ error: 'Invalid bill ID' });
+   try {
+      const letter = await submitPatientDisputeLetter(id, billId);
+      if (letter?.error)
+         return res.status(letter.status).json({ error: letter.error });
+      return letter
+         ? res.json(letter)
+         : res.status(404).json({ error: 'Dispute letter not found' });
+   } catch (error) {
+      console.error('Failed to submit dispute letter to staff:', error);
+      return res.status(500).json({ error: 'Failed to submit dispute letter' });
    }
 };
 

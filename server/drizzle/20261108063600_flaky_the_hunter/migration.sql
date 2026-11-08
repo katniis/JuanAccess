@@ -1,0 +1,1 @@
+ALTER TABLE "dispute_letters" ADD COLUMN "submitted_at" timestamp with time zone;

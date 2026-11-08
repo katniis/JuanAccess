@@ -177,8 +177,28 @@ describe('waitlist routes', () => {
          });
       });
 
+      it('returns 409 when matching active waitlist criteria already exist', async () => {
+         mockQueryQueue.push(
+            [patientUser],
+            [{ id: 1 }],
+            [{ id: 2, status: 'waiting' }],
+         );
+
+         const res = await postJson(
+            ctx.baseUrl,
+            '/waitlist',
+            validBody,
+            authHeader(patientToken),
+         );
+
+         expect(res.status).toBe(409);
+         expect(await readJson(res)).toEqual({
+            error: 'An active waitlist entry already matches these criteria.',
+         });
+      });
+
       it('returns 201 with the created waitlist entry', async () => {
-         mockQueryQueue.push([patientUser], [{ id: 1 }], [entry]);
+         mockQueryQueue.push([patientUser], [{ id: 1 }], [], [entry]);
 
          const res = await postJson(
             ctx.baseUrl,

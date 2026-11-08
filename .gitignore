@@ -156,4 +156,10 @@ vite.config.ts.timestamp-*
 
 .agent
 .agents
+docs/superpowers
+docs/test-runs
+docs/testing-handoff.md
+.superpowers
 graphify-out
+.playwright-mcp
+tmp

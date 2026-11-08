@@ -70,6 +70,9 @@ export const patientRegister = async (req, res) => {
       if (!email || !password || !firstName || !lastName || !dateOfBirth) {
          return res.status(400).json({ message: 'Missing required fields.' });
       }
+      if (!isValidDate(dateOfBirth)) {
+         return res.status(400).json({ message: 'Invalid date of birth.' });
+      }
 
       const hasInsurance = [
          insurerName,
@@ -274,26 +277,13 @@ export const acceptStaffInvitation = async (req, res) => {
             .limit(1);
          if (existing.length) return { conflict: true };
          const passwordHash = await bcrypt.hash(password, passwordRounds);
-         let providerId = null;
-         if (invite.role === 'staff') {
-            const [provider] = await tx
-               .insert(providers)
-               .values({
-                  firstName: invite.firstName,
-                  lastName: invite.lastName,
-                  specialty: invite.specialty,
-                  npiNumber: invite.npiNumber,
-               })
-               .returning({ id: providers.id });
-            providerId = provider.id;
-         }
          const [user] = await tx
             .insert(users)
             .values({
                email: invite.email,
                passwordHash,
                role: invite.role,
-               providerId,
+               providerId: null,
                displayName: `${invite.firstName} ${invite.lastName}`,
             })
             .returning();

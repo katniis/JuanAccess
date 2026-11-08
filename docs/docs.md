@@ -76,7 +76,7 @@ Standard auth. Registering links the account to a patient record (seeded from sy
 - System extracts line items automatically, displayed in a table
 - Flagged items marked with a reason (not covered / duplicate / coding mismatch)
 - Click a line item → plain-language explanation of that charge/service
-- If issues are found, a dispute letter is drafted automatically for the patient to read, edit, and download — patient sends it themselves, no staff involved
+- If issues are found, a dispute letter is drafted automatically for the patient to review and edit. The patient can submit it to clinic staff, where it appears in the read-only Disputes page, or download it.
 - History of past uploads and outcomes
 
 ---
@@ -151,7 +151,7 @@ This is your read-only status page: date, provider, insurance status, and prior-
 
 ### 7. After a visit, something looks off on your bill — Bill Upload
 
-You upload a photo or PDF of the bill. The system reads it, pulls out each line item into a table, and flags anything suspicious (overcharge, duplicate, something not covered). Don't recognize a charge? Click it — you get a plain-language explanation of what that service actually was. If real issues are flagged, a dispute letter is already drafted for you — you review it, edit if needed, and send it yourself.
+You upload a photo or PDF of the bill. The system reads it, pulls out each line item into a table, and flags anything suspicious (overcharge, duplicate, something not covered). Don't recognize a charge? Click it — you get a plain-language explanation of what that service actually was. If real issues are flagged, a dispute letter is already drafted for you — review and edit it, then submit it to clinic staff. It appears in their read-only Disputes page. You can also download a copy.
 
 > **That's the full patient loop:** book → (system handles insurance/prior-auth quietly) → attend visit → dispute a bill if needed.
 
@@ -185,7 +185,7 @@ Same idea, but the detail view shows three things stacked: the matched clinical 
 
 ### 7. Checking on billing disputes — Disputes (view-only)
 
-You can see what patients have flagged and disputed on their end, for visibility/reporting. You don't act on these — the patient handles it themselves.
+You can see disputes patients have submitted, along with the flagged issues and the letter they filed. The page is read-only for staff.
 
 ---
 
@@ -225,16 +225,16 @@ No special handling needed — this only ever depends on a specific visit's bill
 
 ## 5. Core Feature Logic — Rule vs. AI vs. Human Gate
 
-| Feature                  | Rule (deterministic)                                       | AI (Gemini)                                                            | Human gate                                           |
-| ------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| Slot matching            | Query rooms ∩ providers ∩ equipment ∩ patient window       | —                                                                      | none needed                                          |
-| Waitlist auto-fill       | FCFS match on cancellation, countdown cascade              | —                                                                      | patient confirms/declines                            |
-| Insurance eligibility    | Lookup stored coverage status                              | —                                                                      | none                                                 |
-| Prior-auth requirement   | Rule table: visit-type × plan → required?                  | —                                                                      | none                                                 |
-| Prior-auth justification | Rule table decides _if_ needed                             | Drafts justification text from chart data                              | Staff reviews, elevated staff submits                |
-| Pre-visit summary        | Query last N encounters/labs/meds                          | Turns pulled data into narrative                                       | Doctor/staff verify against raw data shown alongside |
-| Appeal guideline match   | Rule table: visit-type/diagnosis → guideline doc           | Drafts appeal citing the matched guideline                             | Staff reviews, elevated staff submits                |
-| Bill line-item flagging  | Compare extracted items vs. recorded procedures + coverage | Extracts items from PDF/image, explains charges, drafts dispute letter | Patient reviews before sending (self-serve)          |
+| Feature                  | Rule (deterministic)                                       | AI (Gemini)                                                            | Human gate                                                               |
+| ------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Slot matching            | Query rooms ∩ providers ∩ equipment ∩ patient window       | —                                                                      | none needed                                                              |
+| Waitlist auto-fill       | FCFS match on cancellation, countdown cascade              | —                                                                      | patient confirms/declines                                                |
+| Insurance eligibility    | Lookup stored coverage status                              | —                                                                      | none                                                                     |
+| Prior-auth requirement   | Rule table: visit-type × plan → required?                  | —                                                                      | none                                                                     |
+| Prior-auth justification | Rule table decides _if_ needed                             | Drafts justification text from chart data                              | Staff reviews, elevated staff submits                                    |
+| Pre-visit summary        | Query last N encounters/labs/meds                          | Turns pulled data into narrative                                       | Doctor/staff verify against raw data shown alongside                     |
+| Appeal guideline match   | Rule table: visit-type/diagnosis → guideline doc           | Drafts appeal citing the matched guideline                             | Staff reviews, elevated staff submits                                    |
+| Bill line-item flagging  | Compare extracted items vs. recorded procedures + coverage | Extracts items from PDF/image, explains charges, drafts dispute letter | Patient reviews/edits, then submits it to staff; staff view is read-only |
 
 Guiding principle: **rules decide _what_ goes into a decision or document; AI only handles turning that into readable text.** Every AI touchpoint stays explainable because it never makes the actual determination.
 

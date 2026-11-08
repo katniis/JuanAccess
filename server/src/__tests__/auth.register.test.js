@@ -107,6 +107,21 @@ describe('POST /auth/register', () => {
       });
    });
 
+   it.each(['not-a-date', '2020-02-31'])(
+      'returns 400 for invalid date_of_birth %s',
+      async (date_of_birth) => {
+         const res = await postJson(ctx.baseUrl, '/auth/register', {
+            ...validBody,
+            date_of_birth,
+         });
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            message: 'Invalid date of birth.',
+         });
+      },
+   );
+
    it('returns 400 when the body is empty', async () => {
       const res = await fetch(`${ctx.baseUrl}/auth/register`, {
          method: 'POST',

@@ -20,4 +20,5 @@ export const disputeLetters = pgTable('dispute_letters', {
       .defaultNow(),
    patientEdited: boolean('patient_edited').notNull().default(false),
    downloadedAt: timestamp('downloaded_at', { withTimezone: true }),
+   submittedAt: timestamp('submitted_at', { withTimezone: true }),
 });

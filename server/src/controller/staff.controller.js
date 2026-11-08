@@ -29,6 +29,7 @@ import { getCoverageStatusForAppointment } from '../services/insurance.service.j
 import {
    listAppointmentProcedures,
    listDisputes,
+   getSubmittedDispute,
    listFeeSchedule,
    recordProcedure,
 } from '../services/billing.service.js';
@@ -146,6 +147,23 @@ export const getStaffDisputes = async (_req, res) => {
       return res
          .status(500)
          .json({ error: 'Failed to fetch billing disputes' });
+   }
+};
+
+export const getStaffDisputeDetail = async (req, res) => {
+   const billId = Number(req.params.id);
+   if (!Number.isInteger(billId) || billId < 1)
+      return res.status(400).json({ error: 'Invalid dispute ID' });
+   try {
+      const dispute = await getSubmittedDispute(billId);
+      return dispute
+         ? res.status(200).json({ dispute })
+         : res.status(404).json({ error: 'Submitted dispute not found' });
+   } catch (error) {
+      console.error('Failed to fetch submitted dispute:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to fetch submitted dispute' });
    }
 };
 
