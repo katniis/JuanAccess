@@ -4,7 +4,7 @@ import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import StatusPill from '../../components/StatusPill.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import { getAppointmentVisitTypes } from '../../services/appointmentBooking.js';
 import { clinicDateKey, formatRemaining } from '../../services/patientDates.js';
@@ -44,7 +44,7 @@ function PatientWaitlist() {
    }));
    const [loadError, setLoadError] = useState('');
    const [formError, setFormError] = useState('');
-   const [clock, setClock] = useState(Date.now());
+   const [clock, setClock] = useState(0);
    const pageRef = useRef(null);
    const { notify } = usePortalFeedback();
    usePortalPageReveal(pageRef, !loading);
@@ -62,6 +62,7 @@ function PatientWaitlist() {
             if (!current) return;
             setEntries(nextEntries);
             setVisitTypes(nextVisitTypes);
+            setClock(Date.now());
          })
          .catch((error) => {
             if (current)

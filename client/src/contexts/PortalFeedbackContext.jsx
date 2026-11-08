@@ -1,13 +1,6 @@
-import {
-   createContext,
-   useCallback,
-   useContext,
-   useRef,
-   useState,
-} from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Toast from '../components/Toast.jsx';
-
-const PortalFeedbackContext = createContext(null);
+import { PortalFeedbackContext } from './portalFeedbackContextValue.js';
 
 export function PortalFeedbackProvider({ children }) {
    const [toasts, setToasts] = useState([]);
@@ -78,13 +71,4 @@ export function PortalFeedbackProvider({ children }) {
          </div>
       </PortalFeedbackContext.Provider>
    );
-}
-
-export function usePortalFeedback() {
-   const context = useContext(PortalFeedbackContext);
-   if (!context)
-      throw new Error(
-         'usePortalFeedback must be used inside PortalFeedbackProvider.',
-      );
-   return context;
 }

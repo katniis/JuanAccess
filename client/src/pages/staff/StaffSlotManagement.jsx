@@ -16,9 +16,11 @@ function todayInManila() {
 }
 
 function StaffSlotManagement() {
-   const [facility, setFacility] = useState(null);
+   const [facilityResult, setFacilityResult] = useState(null);
    const [selectedDate, setSelectedDate] = useState(todayInManila);
-   const [hasError, setHasError] = useState(false);
+   const hasFacilityResult = facilityResult?.date === selectedDate;
+   const facility = hasFacilityResult ? facilityResult.facility : null;
+   const hasError = hasFacilityResult && facilityResult.error;
    const [selectedSlot, setSelectedSlot] = useState(null);
    const closeButtonRef = useRef(null);
    const slotTriggerRef = useRef(null);
@@ -54,14 +56,13 @@ function StaffSlotManagement() {
    useEffect(() => {
       let current = true;
 
-      setFacility(null);
-      setHasError(false);
       getStaffSlotManagement(selectedDate)
          .then((data) => {
-            if (current) setFacility(data);
+            if (current)
+               setFacilityResult({ date: selectedDate, facility: data });
          })
          .catch(() => {
-            if (current) setHasError(true);
+            if (current) setFacilityResult({ date: selectedDate, error: true });
          });
 
       return () => {

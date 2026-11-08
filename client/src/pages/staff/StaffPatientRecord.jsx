@@ -20,33 +20,35 @@ const fullName = (person) =>
 
 function StaffPatientRecord() {
    const { recordType, recordId } = useParams();
-   const [record, setRecord] = useState(null);
-   const [notFound, setNotFound] = useState(false);
-   const [hasError, setHasError] = useState(false);
+   const [recordResult, setRecordResult] = useState(null);
+   const resultKey = JSON.stringify([recordType, recordId]);
+   const hasMatchingResult = recordResult?.key === resultKey;
+   const record = hasMatchingResult ? recordResult.record : null;
+   const notFound =
+      recordType !== 'patients' || (hasMatchingResult && recordResult.notFound);
+   const hasError = hasMatchingResult && recordResult.error;
    const pageRef = useRef(null);
    usePortalPageReveal(pageRef, Boolean(record));
 
    useEffect(() => {
       let current = true;
-      setRecord(null);
-      setNotFound(false);
-      setHasError(false);
-      if (recordType !== 'patients') {
-         setNotFound(true);
-         return undefined;
-      }
+      if (recordType !== 'patients') return undefined;
       getStaffPatientRecord(recordId)
          .then((data) => {
-            if (current) setRecord(data);
+            if (current) setRecordResult({ key: resultKey, record: data });
          })
          .catch((error) => {
             if (current)
-               error.status === 404 ? setNotFound(true) : setHasError(true);
+               setRecordResult({
+                  key: resultKey,
+                  notFound: error.status === 404,
+                  error: error.status !== 404,
+               });
          });
       return () => {
          current = false;
       };
-   }, [recordId, recordType]);
+   }, [recordId, recordType, resultKey]);
 
    if (hasError)
       return (

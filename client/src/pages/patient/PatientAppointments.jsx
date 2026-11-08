@@ -4,7 +4,7 @@ import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import StatusPill from '../../components/StatusPill.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    cancelPatientAppointment,

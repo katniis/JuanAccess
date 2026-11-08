@@ -5,7 +5,7 @@ import {
    useNavigate,
    useSearchParams,
 } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { useAuth } from '../contexts/useAuth.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {

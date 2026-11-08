@@ -7,7 +7,7 @@ import {
    useNavigate,
 } from 'react-router-dom';
 import Icon from '../components/Icon.jsx';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { useAuth } from '../contexts/useAuth.js';
 import { PortalFeedbackProvider } from '../contexts/PortalFeedbackContext.jsx';
 
 const navigation = [
@@ -23,7 +23,8 @@ function StaffLayout() {
    const { pathname } = useLocation();
    const navigate = useNavigate();
    const { user, signOut } = useAuth();
-   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+   const [accountMenuPath, setAccountMenuPath] = useState(null);
+   const accountMenuOpen = accountMenuPath === pathname;
    const accountAreaRef = useRef(null);
    const accountButtonRef = useRef(null);
    const displayName = user?.displayName?.trim() || user?.email || 'Staff';
@@ -57,19 +58,15 @@ function StaffLayout() {
          : 'Staff Dashboard');
 
    useEffect(() => {
-      setAccountMenuOpen(false);
-   }, [pathname]);
-
-   useEffect(() => {
       if (!accountMenuOpen) return undefined;
 
       const closeOnOutsideClick = (event) => {
          if (!accountAreaRef.current?.contains(event.target))
-            setAccountMenuOpen(false);
+            setAccountMenuPath(null);
       };
       const closeOnEscape = (event) => {
          if (event.key === 'Escape') {
-            setAccountMenuOpen(false);
+            setAccountMenuPath(null);
             accountButtonRef.current?.focus();
          }
       };
@@ -138,7 +135,9 @@ function StaffLayout() {
                      aria-label={`${staff.displayName}, staff account`}
                      aria-expanded={accountMenuOpen}
                      aria-controls="staff-account-menu"
-                     onClick={() => setAccountMenuOpen((open) => !open)}>
+                     onClick={() =>
+                        setAccountMenuPath(accountMenuOpen ? null : pathname)
+                     }>
                      <span className="avatar">{staff.initials}</span>
                      <span className="account-copy">
                         <strong>{staff.displayName}</strong>

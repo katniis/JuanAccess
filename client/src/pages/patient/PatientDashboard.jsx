@@ -12,7 +12,7 @@ import {
 import { cancelPatientAppointment } from '../../services/patientAppointments.js';
 import { getPatientDashboard } from '../../services/patientDashboard.js';
 import { formatRemaining } from '../../services/patientDates.js';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    confirmWaitlistOffer,
@@ -26,7 +26,7 @@ function PatientDashboard() {
    const [isLoading, setIsLoading] = useState(true);
    const [busyAction, setBusyAction] = useState('');
    const [appointmentToCancel, setAppointmentToCancel] = useState(null);
-   const [clock, setClock] = useState(Date.now());
+   const [clock, setClock] = useState(0);
    const pageRef = useRef(null);
    const { notify } = usePortalFeedback();
    usePortalPageReveal(pageRef, Boolean(dashboard) && !isLoading);
@@ -35,7 +35,10 @@ function PatientDashboard() {
       let current = true;
       getPatientDashboard()
          .then((data) => {
-            if (current) setDashboard(data);
+            if (current) {
+               setDashboard(data);
+               setClock(Date.now());
+            }
          })
          .catch(() => {
             if (current) setHasError(true);
@@ -48,15 +51,18 @@ function PatientDashboard() {
       };
    }, []);
 
+   const offeredSlotId = dashboard?.offeredSlot?.id;
+
    useEffect(() => {
-      if (!dashboard?.offeredSlot) return undefined;
+      if (!offeredSlotId) return undefined;
       const interval = window.setInterval(() => setClock(Date.now()), 1000);
       return () => window.clearInterval(interval);
-   }, [dashboard?.offeredSlot?.id]);
+   }, [offeredSlotId]);
 
    const refreshDashboard = async () => {
       const nextDashboard = await getPatientDashboard();
       setDashboard(nextDashboard);
+      setClock(Date.now());
       setHasError(false);
    };
 
@@ -123,7 +129,10 @@ function PatientDashboard() {
                setIsLoading(true);
                setHasError(false);
                getPatientDashboard()
-                  .then(setDashboard)
+                  .then((nextDashboard) => {
+                     setDashboard(nextDashboard);
+                     setClock(Date.now());
+                  })
                   .catch(() => setHasError(true))
                   .finally(() => setIsLoading(false));
             }}

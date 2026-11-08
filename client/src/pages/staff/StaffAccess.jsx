@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    createStaffInvitation,

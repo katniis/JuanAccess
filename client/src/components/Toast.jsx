@@ -5,7 +5,10 @@ import { gsap, useGSAP } from '../utils/portalGsap.js';
 function Toast({ toast, onDismiss, onExitComplete }) {
    const toastRef = useRef(null);
    const dismissRef = useRef(onDismiss);
-   dismissRef.current = onDismiss;
+
+   useEffect(() => {
+      dismissRef.current = onDismiss;
+   }, [onDismiss]);
 
    useEffect(() => {
       if (toast.isLeaving) return undefined;

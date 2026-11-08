@@ -4,7 +4,7 @@ import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import PortalActionProgress from '../../components/PortalActionProgress.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    getStaffAppealDetail,
@@ -23,8 +23,6 @@ const statusLabels = {
    approved: 'Approved',
    denied: 'Denied',
 };
-const fullName = (first, last) =>
-   [first, last].filter(Boolean).join(' ') || 'Patient record';
 const dateLabel = (value) =>
    value
       ? new Intl.DateTimeFormat('en-US', {

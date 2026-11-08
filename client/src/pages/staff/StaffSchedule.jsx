@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    getAppointmentPreVisitData,
@@ -83,8 +83,6 @@ function AppointmentDrawer({
 
    useEffect(() => {
       let current = true;
-      setLoading(true);
-      setError(false);
       getAppointmentPreVisitData(appointment.id)
          .then((data) => {
             if (current) setDetail(data);
@@ -280,15 +278,19 @@ function AppointmentDrawer({
 
 function StaffSchedule() {
    const [searchParams, setSearchParams] = useSearchParams();
-   const requestedProviderId = useRef(
-      Number(searchParams.get('provider')) || null,
+   const [requestedProviderId] = useState(
+      () => Number(searchParams.get('provider')) || null,
    );
    const [providers, setProviders] = useState(null);
-   const [providerId, setProviderId] = useState(requestedProviderId.current);
+   const [providerId, setProviderId] = useState(requestedProviderId);
    const [selectedDate, setSelectedDate] = useState(todayInManila);
    const [view, setView] = useState('day');
-   const [appointments, setAppointments] = useState(null);
-   const [hasError, setHasError] = useState(false);
+   const [providerLoadError, setProviderLoadError] = useState(false);
+   const [scheduleResult, setScheduleResult] = useState(null);
+   const scheduleKey = JSON.stringify([providerId, selectedDate, view]);
+   const hasScheduleResult = scheduleResult?.key === scheduleKey;
+   const appointments = hasScheduleResult ? scheduleResult.appointments : null;
+   const scheduleError = hasScheduleResult && scheduleResult.error;
    const [selectedAppointment, setSelectedAppointment] = useState(null);
    const pageRef = useRef(null);
    const closeButtonRef = useRef(null);
@@ -301,7 +303,7 @@ function StaffSchedule() {
          .then((list) => {
             if (!current) return;
             setProviders(list);
-            const fromUrl = requestedProviderId.current;
+            const fromUrl = requestedProviderId;
             setProviderId(
                list.some((provider) => provider.id === fromUrl)
                   ? fromUrl
@@ -309,18 +311,16 @@ function StaffSchedule() {
             );
          })
          .catch(() => {
-            if (current) setHasError(true);
+            if (current) setProviderLoadError(true);
          });
       return () => {
          current = false;
       };
-   }, []);
+   }, [requestedProviderId]);
 
    useEffect(() => {
       if (!providerId || !selectedDate) return undefined;
       let current = true;
-      setAppointments(null);
-      setHasError(false);
       const start = `${selectedDate}T00:00:00.000+08:00`;
       const endDate =
          view === 'week' ? plusDays(selectedDate, 6) : selectedDate;
@@ -330,15 +330,25 @@ function StaffSchedule() {
          view === 'week' ? { start, end } : { date: selectedDate },
       )
          .then((list) => {
-            if (current) setAppointments(list);
+            if (current)
+               setScheduleResult({
+                  key: scheduleKey,
+                  appointments: list,
+                  error: false,
+               });
          })
          .catch(() => {
-            if (current) setHasError(true);
+            if (current)
+               setScheduleResult({
+                  key: scheduleKey,
+                  appointments: [],
+                  error: true,
+               });
          });
       return () => {
          current = false;
       };
-   }, [providerId, selectedDate, view]);
+   }, [providerId, scheduleKey, selectedDate, view]);
 
    useEffect(() => {
       if (!selectedAppointment) return undefined;
@@ -381,7 +391,7 @@ function StaffSchedule() {
       [appointments, selectedDate],
    );
 
-   if (hasError)
+   if (providerLoadError || scheduleError)
       return (
          <ErrorState
             title="The provider schedule couldn’t load"
@@ -554,6 +564,7 @@ function StaffSchedule() {
          )}
          {selectedAppointment && (
             <AppointmentDrawer
+               key={selectedAppointment.id}
                appointment={selectedAppointment}
                provider={selectedProvider}
                selectedDate={selectedDate}

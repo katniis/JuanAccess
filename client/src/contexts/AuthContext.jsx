@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AuthContext } from './authContextValue.js';
 import {
    acceptStaffInvitation as acceptStaffInvitationRequest,
    getCurrentUser,
@@ -6,8 +7,6 @@ import {
    signIn as signInRequest,
    signOut as signOutRequest,
 } from '../services/auth.js';
-
-const AuthContext = createContext(null);
 
 function AuthProvider({ children }) {
    const [user, setUser] = useState(null);
@@ -100,12 +99,6 @@ function AuthProvider({ children }) {
          {children}
       </AuthContext.Provider>
    );
-}
-
-export function useAuth() {
-   const context = useContext(AuthContext);
-   if (!context) throw new Error('useAuth must be used inside AuthProvider.');
-   return context;
 }
 
 export default AuthProvider;

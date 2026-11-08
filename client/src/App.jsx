@@ -6,7 +6,8 @@ import {
    Routes,
    useLocation,
 } from 'react-router-dom';
-import AuthProvider, { useAuth } from './contexts/AuthContext.jsx';
+import AuthProvider from './contexts/AuthContext.jsx';
+import { useAuth } from './contexts/useAuth.js';
 import AuthPage from './pages/AuthPage.jsx';
 import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import ErrorState from './components/ErrorState.jsx';

@@ -7,7 +7,7 @@ import {
    useNavigate,
 } from 'react-router-dom';
 import Icon from '../components/Icon.jsx';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { useAuth } from '../contexts/useAuth.js';
 import { PortalFeedbackProvider } from '../contexts/PortalFeedbackContext.jsx';
 import { formatClinicDateTime } from '../services/patientDates.js';
 import { getPatientNotifications } from '../services/patientNotifications.js';
@@ -24,7 +24,8 @@ function PatientLayout() {
    const { pathname } = useLocation();
    const navigate = useNavigate();
    const { user, signOut } = useAuth();
-   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+   const [accountMenuPath, setAccountMenuPath] = useState(null);
+   const accountMenuOpen = accountMenuPath === pathname;
    const [notificationsOpen, setNotificationsOpen] = useState(false);
    const [notifications, setNotifications] = useState(null);
    const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -48,10 +49,6 @@ function PatientLayout() {
       await signOut();
       navigate('/login', { replace: true });
    };
-
-   useEffect(() => {
-      setAccountMenuOpen(false);
-   }, [pathname]);
 
    const loadNotifications = async () => {
       setNotificationsLoading(true);
@@ -82,11 +79,11 @@ function PatientLayout() {
 
       const closeOnOutsideClick = (event) => {
          if (!accountAreaRef.current?.contains(event.target))
-            setAccountMenuOpen(false);
+            setAccountMenuPath(null);
       };
       const closeOnEscape = (event) => {
          if (event.key === 'Escape') {
-            setAccountMenuOpen(false);
+            setAccountMenuPath(null);
             accountButtonRef.current?.focus();
          }
       };
@@ -172,7 +169,9 @@ function PatientLayout() {
                      aria-label={displayName + ', patient account'}
                      aria-expanded={accountMenuOpen}
                      aria-controls="patient-account-menu"
-                     onClick={() => setAccountMenuOpen((open) => !open)}>
+                     onClick={() =>
+                        setAccountMenuPath(accountMenuOpen ? null : pathname)
+                     }>
                      <span className="avatar">{initials}</span>
                      <span className="account-copy">
                         <strong>{displayName}</strong>

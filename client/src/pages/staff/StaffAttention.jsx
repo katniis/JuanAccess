@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
-import { buildAttentionItems } from './StaffDashboard.jsx';
+import { buildAttentionItems } from '../../utils/staffAttention.js';
 import { getStaffAttentionData } from '../../services/staffDashboard.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 

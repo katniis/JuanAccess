@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import PortalActionProgress from '../../components/PortalActionProgress.jsx';
 import StatusPill from '../../components/StatusPill.jsx';
-import { usePortalFeedback } from '../../contexts/PortalFeedbackContext.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import { gsap, useGSAP } from '../../utils/portalGsap.js';
 import { formatClinicDate } from '../../services/patientDates.js';
@@ -57,7 +57,26 @@ function UploadBill() {
    const { notify } = usePortalFeedback();
    usePortalPageReveal(pageRef, !isHistoryLoading);
 
-   const loadBillHistory = useCallback(async () => {
+   useEffect(() => {
+      let current = true;
+      getMyBills()
+         .then((history) => {
+            if (!current) return;
+            setBillHistory(history);
+            setHasHistoryError(false);
+         })
+         .catch(() => {
+            if (current) setHasHistoryError(true);
+         })
+         .finally(() => {
+            if (current) setIsHistoryLoading(false);
+         });
+      return () => {
+         current = false;
+      };
+   }, []);
+
+   const retryBillHistory = async () => {
       setIsHistoryLoading(true);
       setHasHistoryError(false);
       try {
@@ -67,11 +86,7 @@ function UploadBill() {
       } finally {
          setIsHistoryLoading(false);
       }
-   }, []);
-
-   useEffect(() => {
-      void loadBillHistory();
-   }, [loadBillHistory]);
+   };
 
    useGSAP(
       () => {
@@ -558,7 +573,7 @@ function UploadBill() {
                   title="Billing history couldn’t load"
                   message="Your bills haven’t been changed. Try loading the history again."
                   retryLabel="Try again"
-                  onRetry={() => void loadBillHistory()}
+                  onRetry={() => void retryBillHistory()}
                />
             ) : billHistory.length ? (
                <>
