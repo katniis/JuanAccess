@@ -142,8 +142,40 @@ export async function listNotifications(userId) {
    return db
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(
+         and(
+            eq(notifications.userId, userId),
+            isNull(notifications.dismissedAt),
+         ),
+      )
       .orderBy(asc(notifications.createdAt));
+}
+
+export async function dismissNotification(userId, notificationId) {
+   const [dismissed] = await db
+      .update(notifications)
+      .set({ dismissedAt: new Date() })
+      .where(
+         and(
+            eq(notifications.id, notificationId),
+            eq(notifications.userId, userId),
+            isNull(notifications.dismissedAt),
+         ),
+      )
+      .returning({ id: notifications.id });
+   return dismissed || null;
+}
+
+export async function dismissAllNotifications(userId) {
+   await db
+      .update(notifications)
+      .set({ dismissedAt: new Date() })
+      .where(
+         and(
+            eq(notifications.userId, userId),
+            isNull(notifications.dismissedAt),
+         ),
+      );
 }
 
 export async function markNotificationRead(userId, notificationId) {

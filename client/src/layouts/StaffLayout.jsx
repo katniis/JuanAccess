@@ -24,10 +24,6 @@ function StaffLayout() {
    const navigate = useNavigate();
    const { user, signOut } = useAuth();
    const [mobileNavOpen, setMobileNavOpen] = useState(false);
-   const [accountMenuPath, setAccountMenuPath] = useState(null);
-   const accountMenuOpen = accountMenuPath === pathname;
-   const accountAreaRef = useRef(null);
-   const accountButtonRef = useRef(null);
    const mobileNavButtonRef = useRef(null);
    const mobileNavFirstLinkRef = useRef(null);
    const sidebarRef = useRef(null);
@@ -96,28 +92,6 @@ function StaffLayout() {
          document.removeEventListener('keydown', closeOnEscape);
       };
    }, [mobileNavOpen]);
-
-   useEffect(() => {
-      if (!accountMenuOpen) return undefined;
-
-      const closeOnOutsideClick = (event) => {
-         if (!accountAreaRef.current?.contains(event.target))
-            setAccountMenuPath(null);
-      };
-      const closeOnEscape = (event) => {
-         if (event.key === 'Escape') {
-            setAccountMenuPath(null);
-            accountButtonRef.current?.focus();
-         }
-      };
-
-      document.addEventListener('pointerdown', closeOnOutsideClick);
-      document.addEventListener('keydown', closeOnEscape);
-      return () => {
-         document.removeEventListener('pointerdown', closeOnOutsideClick);
-         document.removeEventListener('keydown', closeOnEscape);
-      };
-   }, [accountMenuOpen]);
 
    const handleSignOut = async () => {
       await signOut();
@@ -218,7 +192,7 @@ function StaffLayout() {
                         </NavLink>
                      ))}
                   </nav>
-                  <div className="sidebar-account" ref={accountAreaRef}>
+                  <div className="sidebar-account">
                      <NavLink
                         className={({ isActive }) =>
                            'nav-link sidebar-settings' +
@@ -229,36 +203,13 @@ function StaffLayout() {
                         <Icon name="settings" />
                         <span>Settings</span>
                      </NavLink>
-                     <div
-                        className="account-menu"
-                        id="staff-account-menu"
-                        role="group"
-                        aria-label="Staff account options"
-                        hidden={!accountMenuOpen}>
-                        <button
-                           className="account-menu-signout"
-                           type="button"
-                           onClick={() => void handleSignOut()}>
-                           Sign out
-                        </button>
-                     </div>
-                     <button
-                        className="account-button"
-                        type="button"
-                        ref={accountButtonRef}
-                        aria-label={`${staff.displayName}, staff account`}
-                        aria-expanded={accountMenuOpen}
-                        aria-controls="staff-account-menu"
-                        onClick={() =>
-                           setAccountMenuPath(accountMenuOpen ? null : pathname)
-                        }>
+                     <div className="account-profile">
                         <span className="avatar">{staff.initials}</span>
                         <span className="account-copy">
                            <strong>{staff.displayName}</strong>
                            <span>{staff.roleLabel}</span>
                         </span>
-                        <Icon name="chevron-down" />
-                     </button>
+                     </div>
                      <button
                         className="signout-link"
                         type="button"

@@ -62,10 +62,14 @@ function StatusGuide({
                <ul>
                   {guide.statuses.map((status) => (
                      <li key={status.label}>
-                        <StatusPill status={status.pill}>
-                           {status.label}
-                        </StatusPill>
-                        <span>{status.description}</span>
+                        <span className="status-guide-status">
+                           <StatusPill status={status.pill}>
+                              {status.label}
+                           </StatusPill>
+                        </span>
+                        <span className="status-guide-description">
+                           {status.description}
+                        </span>
                      </li>
                   ))}
                </ul>

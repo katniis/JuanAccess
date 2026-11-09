@@ -1,6 +1,8 @@
 import {
    listNotifications,
    getEmailDeliveryStatus,
+   dismissNotification,
+   dismissAllNotifications,
    markNotificationRead,
    sendPendingNotificationEmails,
 } from '../services/notification.service.js';
@@ -28,6 +30,33 @@ export async function readMyNotification(req, res) {
       return res
          .status(500)
          .json({ error: 'Failed to mark notification read' });
+   }
+}
+
+export async function dismissMyNotification(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid notification ID' });
+   try {
+      const notification = await dismissNotification(req.user.id, id);
+      return notification
+         ? res.status(204).end()
+         : res.status(404).json({ error: 'Notification not found' });
+   } catch (error) {
+      console.error('Failed to dismiss notification:', error);
+      return res.status(500).json({ error: 'Failed to dismiss notification' });
+   }
+}
+
+export async function dismissAllMyNotifications(req, res) {
+   try {
+      await dismissAllNotifications(req.user.id);
+      return res.status(204).end();
+   } catch (error) {
+      console.error('Failed to dismiss all notifications:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to dismiss all notifications' });
    }
 }
 

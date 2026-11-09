@@ -4,14 +4,16 @@ import {
 } from './patientAppointments.js';
 import { getMyBills } from './patientBills.js';
 import { patientRequest } from './patientApi.js';
-import { formatClinicDate, formatClinicDateTime } from './patientDates.js';
+import { formatClinicDateTime } from './patientDates.js';
+import { getMyCoverage } from './patientSettings.js';
 import { getMyWaitlist } from './patientWaitlist.js';
 
 export async function getPatientDashboard() {
-   const [appointmentRows, waitlistRows, bills] = await Promise.all([
+   const [appointmentRows, bills, coverages, waitlistRows] = await Promise.all([
       patientRequest('/appointment/mine'),
-      getMyWaitlist(),
       getMyBills(),
+      getMyCoverage().catch(() => []),
+      getMyWaitlist(),
    ]);
    const now = Date.now();
    const appointments = appointmentRows.map(mapPatientAppointment);
@@ -19,13 +21,13 @@ export async function getPatientDashboard() {
       appointments,
       now,
    );
-   const activeWaitlist = waitlistRows.filter((entry) =>
+   const upcomingAppointment = upcomingAppointments[0] || null;
+   const waitlistEntries = waitlistRows.filter((entry) =>
       ['waiting', 'offered'].includes(entry.status),
    );
-   const offeredEntry = activeWaitlist.find(
+   const offeredEntry = waitlistEntries.find(
       (entry) => entry.status === 'offered',
    );
-   const upcomingAppointment = upcomingAppointments[0] || null;
    const completedSince = new Date();
    completedSince.setFullYear(completedSince.getFullYear() - 1);
    const completedVisits = appointments.filter((appointment) => {
@@ -39,13 +41,62 @@ export async function getPatientDashboard() {
    const billsToReview = bills.filter((bill) =>
       ['processing', 'disputed'].includes(bill.status),
    );
+   const recentActivity = [
+      ...appointmentRows.map((appointment) => {
+         const providerName = [
+            appointment.providerFirst,
+            appointment.providerLast,
+         ]
+            .filter(Boolean)
+            .join(' ');
+         return {
+            id: `appointment-${appointment.id}`,
+            title: 'Appointment booked',
+            description:
+               `${appointment.visitTypeName || 'Appointment'}` +
+               (providerName ? ` with Dr. ${providerName}` : ''),
+            occurredAt: appointment.createdAt,
+            href: '/patient/appointments',
+            icon: 'calendar',
+         };
+      }),
+      ...bills.map((bill) => ({
+         id: `bill-${bill.id}`,
+         title: 'Bill uploaded',
+         description: 'A bill was uploaded to your account.',
+         occurredAt: bill.uploadDate,
+         href: '/patient/bills',
+         icon: 'receipt',
+      })),
+      ...coverages.map((coverage) => {
+         const createdAt = Date.parse(coverage.createdAt);
+         const updatedAt = Date.parse(coverage.updatedAt ?? coverage.createdAt);
+         const wasUpdated = Number.isFinite(updatedAt) && updatedAt > createdAt;
+         return {
+            id: `coverage-${coverage.id}`,
+            title: wasUpdated
+               ? 'Insurance information updated'
+               : 'Insurance information added',
+            description: wasUpdated
+               ? 'Your insurance information was updated in Settings.'
+               : 'Insurance information was added in Settings.',
+            occurredAt: wasUpdated ? coverage.updatedAt : coverage.createdAt,
+            href: '/patient/settings',
+            icon: 'settings',
+         };
+      }),
+   ]
+      .filter(
+         (activity) =>
+            activity.occurredAt &&
+            Number.isFinite(Date.parse(activity.occurredAt)),
+      )
+      .sort(
+         (left, right) =>
+            Date.parse(right.occurredAt) - Date.parse(left.occurredAt),
+      );
 
    return {
-      dateLabel: formatClinicDate(new Date(), {
-         weekday: 'long',
-         month: 'long',
-         year: 'numeric',
-      }),
       offeredSlot: offeredEntry
          ? {
               id: offeredEntry.id,
@@ -60,12 +111,8 @@ export async function getPatientDashboard() {
          ? {
               ...upcomingAppointment,
               visitDescription: upcomingAppointment.visitType,
-              dateLabel: formatClinicDateTime(
-                 upcomingAppointment.scheduledStart,
-              ),
            }
          : null,
-      waitlistEntries: activeWaitlist,
       summaryCards: [
          {
             icon: 'calendar',
@@ -97,5 +144,7 @@ export async function getPatientDashboard() {
             path: '/patient/bills',
          },
       ],
+      waitlistEntries,
+      recentActivity,
    };
 }

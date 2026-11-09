@@ -17,6 +17,7 @@ export const notifications = pgTable('notifications', {
    type: varchar('type', { length: 50 }).notNull(),
    message: text('message').notNull(),
    isRead: boolean('is_read').notNull().default(false),
+   dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
    createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -12,13 +12,37 @@ import {
 } from '../../components/PatientDashboardWidgets.jsx';
 import { cancelPatientAppointment } from '../../services/patientAppointments.js';
 import { getPatientDashboard } from '../../services/patientDashboard.js';
-import { formatRemaining } from '../../services/patientDates.js';
+import {
+   formatClinicDate,
+   formatClinicTime,
+   formatRemaining,
+} from '../../services/patientDates.js';
 import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    confirmWaitlistOffer,
    declineWaitlistOffer,
 } from '../../services/patientWaitlist.js';
+
+const ACTIVITY_PER_PAGE = 3;
+const mascotAnimations = [
+   {
+      name: 'wave',
+      sprite: '/images/mascot-explorations/mascot-wave-loop.png',
+   },
+   {
+      name: 'cheer',
+      sprite: '/images/mascot-explorations/mascot-cheer-loop.png',
+   },
+   {
+      name: 'clap',
+      sprite: '/images/mascot-explorations/mascot-clap-loop.png',
+   },
+   {
+      name: 'thoughtful',
+      sprite: '/images/mascot-explorations/mascot-thoughtful-loop.png',
+   },
+];
 
 function PatientDashboard() {
    const { user } = useOutletContext();
@@ -27,7 +51,12 @@ function PatientDashboard() {
    const [isLoading, setIsLoading] = useState(true);
    const [busyAction, setBusyAction] = useState('');
    const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+   const [activityPage, setActivityPage] = useState(1);
    const [clock, setClock] = useState(0);
+   const [mascotAnimation] = useState(
+      () =>
+         mascotAnimations[Math.floor(Math.random() * mascotAnimations.length)],
+   );
    const pageRef = useRef(null);
    const { notify } = usePortalFeedback();
    usePortalPageReveal(pageRef, Boolean(dashboard) && !isLoading);
@@ -142,12 +171,46 @@ function PatientDashboard() {
    }
 
    const {
-      dateLabel,
       offeredSlot,
       upcomingAppointment,
-      waitlistEntries,
       summaryCards,
+      waitlistEntries = [],
+      recentActivity = [],
    } = dashboard;
+   const activityPageCount = Math.ceil(
+      recentActivity.length / ACTIVITY_PER_PAGE,
+   );
+   const currentActivityPage = Math.min(activityPage, activityPageCount || 1);
+   const activityPageStart = (currentActivityPage - 1) * ACTIVITY_PER_PAGE;
+   const visibleActivity = recentActivity.slice(
+      activityPageStart,
+      activityPageStart + ACTIVITY_PER_PAGE,
+   );
+   const insuranceNeedsReview = Boolean(
+      upcomingAppointment && upcomingAppointment.insuranceLabel !== 'Active',
+   );
+   const insuranceTaskTitle =
+      {
+         Unverified: 'Verify insurance information',
+         Inactive: 'Update insurance information',
+         Unknown: 'Confirm insurance information',
+      }[upcomingAppointment?.insuranceLabel] || 'Insurance information on file';
+   const priorAuthorizationStatus =
+      upcomingAppointment?.priorAuthorizationStatus;
+   const priorAuthorizationReady = ['approved', 'not-required'].includes(
+      priorAuthorizationStatus,
+   );
+   const priorAuthorizationDenied = priorAuthorizationStatus === 'denied';
+   const priorAuthorizationTone = priorAuthorizationReady
+      ? 'complete'
+      : priorAuthorizationDenied
+        ? 'attention'
+        : 'pending';
+   const priorAuthorizationIcon = priorAuthorizationReady
+      ? 'check'
+      : priorAuthorizationDenied
+        ? 'alert'
+        : 'clock';
    const firstName = user?.displayName?.trim().split(/\s+/)[0] || 'there';
    const hour = Number(
       new Intl.DateTimeFormat('en-US', {
@@ -172,11 +235,22 @@ function PatientDashboard() {
             onConfirm={() => void cancelUpcomingAppointment()}
          />
          <section className="welcome-row">
-            <div>
-               <h1>
-                  {greeting}, {firstName}
-               </h1>
-               <p>{dateLabel}</p>
+            <div className="dashboard-welcome-banner">
+               <div className="dashboard-welcome-copy">
+                  <h1>
+                     {greeting}, {firstName}!
+                  </h1>
+                  <p>Here’s a quick overview of your care with JuanAccess.</p>
+               </div>
+               <div className="dashboard-mascot" aria-hidden="true">
+                  <span
+                     className="dashboard-mascot-sprite"
+                     data-mascot-animation={mascotAnimation.name}
+                     style={{
+                        '--mascot-sprite': `url('${mascotAnimation.sprite}')`,
+                     }}
+                  />
+               </div>
             </div>
             <div className="welcome-actions">
                <Link className="button button-outline" to="/patient/bills">
@@ -238,7 +312,7 @@ function PatientDashboard() {
             </section>
          )}
 
-         <div className="dashboard-grid">
+         <div className="dashboard-grid dashboard-primary-grid">
             <section
                className="panel appointment-panel"
                aria-labelledby="appointment-heading">
@@ -348,7 +422,7 @@ function PatientDashboard() {
             </section>
 
             <section
-               className="panel waitlist-panel"
+               className="panel dashboard-waitlist-panel"
                aria-labelledby="waitlist-heading">
                <div className="panel-heading">
                   <h2 id="waitlist-heading">Active waitlist</h2>
@@ -359,23 +433,235 @@ function PatientDashboard() {
                   </Link>
                </div>
                {waitlistEntries.length ? (
-                  <div className="waitlist-items">
+                  <div className="dashboard-waitlist-items">
                      {waitlistEntries.map((entry) => (
                         <WaitlistRow key={entry.id} entry={entry} />
                      ))}
                   </div>
                ) : (
-                  <div className="dashboard-empty">
-                     <p>You’re not on a waitlist.</p>
+                  <div className="dashboard-waitlist-empty">
+                     <span className="dashboard-waitlist-empty-icon">
+                        <Icon name="clock" />
+                     </span>
+                     <strong>You’re not on a waitlist.</strong>
+                     <span>Join to hear about earlier appointments.</span>
                   </div>
                )}
                <Link
-                  className="button button-light join-button"
+                  className="button button-light dashboard-waitlist-join"
                   to="/patient/waitlist">
                   <Icon name="plus" />
                   Join Waitlist
                </Link>
             </section>
+         </div>
+
+         <div
+            className={
+               'dashboard-grid dashboard-lower-grid' +
+               (upcomingAppointment ? '' : ' no-upcoming')
+            }>
+            <section
+               className="panel activity-panel"
+               aria-labelledby="activity-heading">
+               <div className="panel-heading">
+                  <h2 id="activity-heading">Recent activity</h2>
+               </div>
+               {recentActivity.length ? (
+                  <>
+                     <ul className="activity-list" id="recent-activity-list">
+                        {visibleActivity.map((activity) => (
+                           <li key={activity.id}>
+                              <Link
+                                 className="activity-item"
+                                 to={activity.href}>
+                                 <span className="activity-icon">
+                                    <Icon name={activity.icon} />
+                                 </span>
+                                 <span className="activity-copy">
+                                    <strong>{activity.title}</strong>
+                                    <span>{activity.description}</span>
+                                 </span>
+                                 <time dateTime={activity.occurredAt}>
+                                    <span>
+                                       {formatClinicDate(activity.occurredAt)}
+                                    </span>
+                                    <span>
+                                       {formatClinicTime(activity.occurredAt)}
+                                    </span>
+                                 </time>
+                              </Link>
+                           </li>
+                        ))}
+                     </ul>
+                     {activityPageCount > 1 && (
+                        <div className="appointments-pagination">
+                           <span aria-live="polite">
+                              Showing {activityPageStart + 1}–
+                              {Math.min(
+                                 activityPageStart + ACTIVITY_PER_PAGE,
+                                 recentActivity.length,
+                              )}{' '}
+                              of {recentActivity.length}
+                           </span>
+                           <nav aria-label="Recent activity pages">
+                              <button
+                                 className="button button-quiet"
+                                 type="button"
+                                 aria-label="Previous activity page"
+                                 disabled={currentActivityPage === 1}
+                                 onClick={() =>
+                                    setActivityPage(currentActivityPage - 1)
+                                 }>
+                                 <Icon name="chevron-left" />
+                                 Previous
+                              </button>
+                              <span>
+                                 Page {currentActivityPage} of{' '}
+                                 {activityPageCount}
+                              </span>
+                              <button
+                                 className="button button-quiet"
+                                 type="button"
+                                 aria-label="Next activity page"
+                                 disabled={
+                                    currentActivityPage === activityPageCount
+                                 }
+                                 onClick={() =>
+                                    setActivityPage(currentActivityPage + 1)
+                                 }>
+                                 Next
+                                 <Icon name="chevron-right" />
+                              </button>
+                           </nav>
+                        </div>
+                     )}
+                  </>
+               ) : (
+                  <div className="activity-empty">
+                     <span className="activity-empty-icon">
+                        <Icon name="clock" />
+                     </span>
+                     <p>No recent activity yet.</p>
+                     <span>
+                        Your appointments, bills, and coverage updates will
+                        appear here.
+                     </span>
+                  </div>
+               )}
+            </section>
+
+            {upcomingAppointment && (
+               <section
+                  className="panel before-visit-panel"
+                  aria-labelledby="before-visit-heading">
+                  <div className="panel-heading before-visit-heading">
+                     <div>
+                        <h2 id="before-visit-heading">Before your visit</h2>
+                        <p>
+                           Complete these to make your appointment smooth and
+                           hassle-free.
+                        </p>
+                     </div>
+                  </div>
+                  <div className="before-visit-content">
+                     <ul className="before-visit-list">
+                        <li
+                           className={
+                              'before-visit-item ' +
+                              (insuranceNeedsReview ? 'attention' : 'complete')
+                           }>
+                           <div className="before-visit-top">
+                              <span className="before-visit-icon">
+                                 <Icon
+                                    name={
+                                       insuranceNeedsReview ? 'alert' : 'check'
+                                    }
+                                 />
+                              </span>
+                              <span className="before-visit-category">
+                                 Insurance
+                              </span>
+                           </div>
+                           <span className="before-visit-copy">
+                              <strong>{insuranceTaskTitle}</strong>
+                              <span>
+                                 {upcomingAppointment.insuranceDescription}
+                              </span>
+                           </span>
+                           <div className="before-visit-footer">
+                              <StatusPill
+                                 status={upcomingAppointment.insuranceStatus}>
+                                 {upcomingAppointment.insuranceLabel}
+                              </StatusPill>
+                              {insuranceNeedsReview && (
+                                 <Link
+                                    className="text-link before-visit-action"
+                                    to="/patient/settings">
+                                    Review <Icon name="chevron-right" />
+                                 </Link>
+                              )}
+                           </div>
+                        </li>
+                        <li className="before-visit-item complete">
+                           <div className="before-visit-top">
+                              <span className="before-visit-icon">
+                                 <Icon name="calendar" />
+                              </span>
+                              <span className="before-visit-category">
+                                 Visit
+                              </span>
+                           </div>
+                           <span className="before-visit-copy">
+                              <strong>Appointment scheduled</strong>
+                              <span>
+                                 {upcomingAppointment.providerName} ·{' '}
+                                 {upcomingAppointment.visitDescription}
+                              </span>
+                           </span>
+                           <div className="before-visit-footer before-visit-appointment-footer">
+                              <span className="before-visit-appointment-meta">
+                                 <strong>Scheduled</strong>
+                                 <span>
+                                    {upcomingAppointment.dateLabel} ·{' '}
+                                    {upcomingAppointment.timeLabel}
+                                 </span>
+                              </span>
+                           </div>
+                        </li>
+                        <li
+                           className={
+                              'before-visit-item ' + priorAuthorizationTone
+                           }>
+                           <div className="before-visit-top">
+                              <span className="before-visit-icon">
+                                 <Icon name={priorAuthorizationIcon} />
+                              </span>
+                              <span className="before-visit-category">
+                                 Prior authorization
+                              </span>
+                           </div>
+                           <span className="before-visit-copy">
+                              <strong>Authorization status</strong>
+                              <span>
+                                 {
+                                    upcomingAppointment.priorAuthorizationDescription
+                                 }
+                              </span>
+                           </span>
+                           <div className="before-visit-footer">
+                              <StatusPill
+                                 status={
+                                    upcomingAppointment.priorAuthorizationStatus
+                                 }>
+                                 {upcomingAppointment.priorAuthorizationLabel}
+                              </StatusPill>
+                           </div>
+                        </li>
+                     </ul>
+                  </div>
+               </section>
+            )}
          </div>
       </div>
    );

@@ -10,7 +10,11 @@ import Icon from '../components/Icon.jsx';
 import { useAuth } from '../contexts/useAuth.js';
 import { PortalFeedbackProvider } from '../contexts/PortalFeedbackContext.jsx';
 import { formatClinicDateTime } from '../services/patientDates.js';
-import { getPatientNotifications } from '../services/patientNotifications.js';
+import {
+   dismissAllPatientNotifications,
+   dismissPatientNotification,
+   getPatientNotifications,
+} from '../services/patientNotifications.js';
 
 const navigation = [
    { label: 'Dashboard', path: '/patient', icon: 'grid', end: true },
@@ -25,19 +29,21 @@ function PatientLayout() {
    const navigate = useNavigate();
    const { user, signOut } = useAuth();
    const [mobileNavOpen, setMobileNavOpen] = useState(false);
-   const [accountMenuPath, setAccountMenuPath] = useState(null);
-   const accountMenuOpen = accountMenuPath === pathname;
    const [notificationsOpen, setNotificationsOpen] = useState(false);
    const [notifications, setNotifications] = useState(null);
    const [notificationsLoading, setNotificationsLoading] = useState(false);
    const [notificationsError, setNotificationsError] = useState('');
-   const accountAreaRef = useRef(null);
-   const accountButtonRef = useRef(null);
+   const [notificationActionError, setNotificationActionError] = useState('');
+   const [notificationActionPending, setNotificationActionPending] =
+      useState(false);
+   const [exitingNotificationIds, setExitingNotificationIds] = useState([]);
    const mobileNavButtonRef = useRef(null);
    const mobileNavFirstLinkRef = useRef(null);
    const sidebarRef = useRef(null);
    const notificationsAreaRef = useRef(null);
    const notificationsButtonRef = useRef(null);
+   const notificationsPopoverRef = useRef(null);
+   const notificationsHeadingRef = useRef(null);
    const currentPage =
       navigation.find((item) => item.path === pathname)?.label ??
       (pathname === '/patient/settings' ? 'Settings' : 'Dashboard');
@@ -118,6 +124,7 @@ function PatientLayout() {
    const loadNotifications = async () => {
       setNotificationsLoading(true);
       setNotificationsError('');
+      setNotificationActionError('');
       try {
          const { notifications: nextNotifications } =
             await getPatientNotifications();
@@ -139,27 +146,52 @@ function PatientLayout() {
       if (shouldOpen) void loadNotifications();
    };
 
-   useEffect(() => {
-      if (!accountMenuOpen) return undefined;
+   const dismissNotification = async (id) => {
+      setNotificationActionPending(true);
+      setNotificationActionError('');
+      try {
+         await dismissPatientNotification(id);
+         setNotificationActionPending(false);
+         setExitingNotificationIds([id]);
+         if (!notificationsPopoverRef.current?.hidden)
+            notificationsHeadingRef.current?.focus();
+      } catch (error) {
+         setNotificationActionError(
+            error.message || 'This notification could not be dismissed.',
+         );
+         setNotificationActionPending(false);
+      }
+   };
 
-      const closeOnOutsideClick = (event) => {
-         if (!accountAreaRef.current?.contains(event.target))
-            setAccountMenuPath(null);
-      };
-      const closeOnEscape = (event) => {
-         if (event.key === 'Escape') {
-            setAccountMenuPath(null);
-            accountButtonRef.current?.focus();
-         }
-      };
+   const dismissAllNotifications = async () => {
+      const ids = notifications?.map((notification) => notification.id) ?? [];
+      if (!ids.length) return;
+      setNotificationActionPending(true);
+      setNotificationActionError('');
+      try {
+         await dismissAllPatientNotifications();
+         setNotificationActionPending(false);
+         setExitingNotificationIds(ids);
+         if (!notificationsPopoverRef.current?.hidden)
+            notificationsHeadingRef.current?.focus();
+      } catch (error) {
+         setNotificationActionError(
+            error.message || 'Notifications could not be cleared.',
+         );
+         setNotificationActionPending(false);
+      }
+   };
 
-      document.addEventListener('pointerdown', closeOnOutsideClick);
-      document.addEventListener('keydown', closeOnEscape);
-      return () => {
-         document.removeEventListener('pointerdown', closeOnOutsideClick);
-         document.removeEventListener('keydown', closeOnEscape);
-      };
-   }, [accountMenuOpen]);
+   const completeNotificationExit = (id) => {
+      setNotifications(
+         (current) =>
+            current?.filter((notification) => notification.id !== id) ??
+            current,
+      );
+      setExitingNotificationIds((current) =>
+         current.filter((notificationId) => notificationId !== id),
+      );
+   };
 
    useEffect(() => {
       if (!notificationsOpen) return undefined;
@@ -255,7 +287,7 @@ function PatientLayout() {
                         </NavLink>
                      ))}
                   </nav>
-                  <div className="sidebar-account" ref={accountAreaRef}>
+                  <div className="sidebar-account">
                      <NavLink
                         className={({ isActive }) =>
                            'nav-link sidebar-settings' +
@@ -266,36 +298,13 @@ function PatientLayout() {
                         <Icon name="settings" />
                         <span>Settings</span>
                      </NavLink>
-                     <div
-                        className="account-menu"
-                        id="patient-account-menu"
-                        role="group"
-                        aria-label="Patient account options"
-                        hidden={!accountMenuOpen}>
-                        <button
-                           className="account-menu-signout"
-                           type="button"
-                           onClick={() => void handleSignOut()}>
-                           Sign out
-                        </button>
-                     </div>
-                     <button
-                        className="account-button"
-                        type="button"
-                        ref={accountButtonRef}
-                        aria-label={displayName + ', patient account'}
-                        aria-expanded={accountMenuOpen}
-                        aria-controls="patient-account-menu"
-                        onClick={() =>
-                           setAccountMenuPath(accountMenuOpen ? null : pathname)
-                        }>
+                     <div className="account-profile">
                         <span className="avatar">{initials}</span>
                         <span className="account-copy">
                            <strong>{displayName}</strong>
                            <span>Patient</span>
                         </span>
-                        <Icon name="chevron-down" />
-                     </button>
+                     </div>
                      <button
                         className="signout-link"
                         type="button"
@@ -308,7 +317,11 @@ function PatientLayout() {
             </aside>
 
             <div className="main-column" inert={mobileNavOpen}>
-               <header className="topbar">
+               <header
+                  className={
+                     'topbar' +
+                     (pathname === '/patient' ? ' topbar-dashboard' : '')
+                  }>
                   <span className="topbar-title">{currentPage}</span>
                   <div
                      className="notification-control"
@@ -326,10 +339,31 @@ function PatientLayout() {
                      <section
                         className="notification-popover"
                         id="patient-notifications"
+                        ref={notificationsPopoverRef}
                         aria-label="Patient notifications"
                         aria-busy={notificationsLoading}
                         hidden={!notificationsOpen}>
-                        <h2>Notifications</h2>
+                        <div className="notification-header">
+                           <h2 ref={notificationsHeadingRef} tabIndex="-1">
+                              Notifications
+                           </h2>
+                           {!notificationsLoading &&
+                              !notificationsError &&
+                              notifications?.length > 0 && (
+                                 <button
+                                    className="notification-clear-all"
+                                    type="button"
+                                    disabled={
+                                       notificationActionPending ||
+                                       exitingNotificationIds.length > 0
+                                    }
+                                    onClick={() =>
+                                       void dismissAllNotifications()
+                                    }>
+                                    Clear all
+                                 </button>
+                              )}
+                        </div>
                         {notificationsLoading ? (
                            <p role="status">Loading notifications…</p>
                         ) : notificationsError ? (
@@ -338,34 +372,80 @@ function PatientLayout() {
                               to try again.
                            </p>
                         ) : notifications?.length ? (
-                           <ul className="notification-list">
-                              {notifications
-                                 .slice()
-                                 .reverse()
-                                 .map((notification) => (
-                                    <li
-                                       className={
-                                          'notification-item' +
-                                          (notification.isRead ? '' : ' unread')
-                                       }
-                                       key={notification.id}>
-                                       <p>{notification.message}</p>
-                                       <span>
-                                          {notification.type.replaceAll(
-                                             '_',
-                                             ' ',
-                                          )}
-                                       </span>
-                                       <time dateTime={notification.createdAt}>
-                                          {formatClinicDateTime(
-                                             notification.createdAt,
-                                          )}
-                                       </time>
-                                    </li>
-                                 ))}
-                           </ul>
+                           <>
+                              {notificationActionError && (
+                                 <p
+                                    className="notification-action-error"
+                                    role="alert">
+                                    {notificationActionError}
+                                 </p>
+                              )}
+                              <ul className="notification-list">
+                                 {notifications
+                                    .slice()
+                                    .reverse()
+                                    .map((notification) => {
+                                       const isExiting =
+                                          exitingNotificationIds.includes(
+                                             notification.id,
+                                          );
+                                       return (
+                                          <li
+                                             className={
+                                                'notification-item' +
+                                                (notification.isRead
+                                                   ? ''
+                                                   : ' unread') +
+                                                (isExiting ? ' exiting' : '')
+                                             }
+                                             key={notification.id}
+                                             onAnimationEnd={() => {
+                                                if (isExiting)
+                                                   completeNotificationExit(
+                                                      notification.id,
+                                                   );
+                                             }}>
+                                             <div className="notification-item-header">
+                                                <p>{notification.message}</p>
+                                                <button
+                                                   className="notification-dismiss"
+                                                   type="button"
+                                                   aria-label={`Dismiss notification: ${notification.message}`}
+                                                   title="Dismiss notification"
+                                                   disabled={
+                                                      notificationActionPending ||
+                                                      exitingNotificationIds.length >
+                                                         0
+                                                   }
+                                                   onClick={() =>
+                                                      void dismissNotification(
+                                                         notification.id,
+                                                      )
+                                                   }>
+                                                   <Icon name="close" />
+                                                </button>
+                                             </div>
+                                             <span>
+                                                {notification.type.replaceAll(
+                                                   '_',
+                                                   ' ',
+                                                )}
+                                             </span>
+                                             <time
+                                                dateTime={
+                                                   notification.createdAt
+                                                }>
+                                                {formatClinicDateTime(
+                                                   notification.createdAt,
+                                                )}
+                                             </time>
+                                          </li>
+                                       );
+                                    })}
+                              </ul>
+                           </>
                         ) : (
-                           <p>No notifications yet.</p>
+                           <p role="status">No notifications yet.</p>
                         )}
                      </section>
                   </div>

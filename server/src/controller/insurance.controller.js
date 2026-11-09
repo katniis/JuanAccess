@@ -23,6 +23,7 @@ export const getMyCoverage = async (req, res) => {
             status: patientCoverage.status,
             verifiedAt: patientCoverage.verifiedAt,
             createdAt: patientCoverage.createdAt,
+            updatedAt: patientCoverage.updatedAt,
          })
          .from(patientCoverage)
          .innerJoin(

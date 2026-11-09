@@ -4,18 +4,20 @@ import StatusPill from './StatusPill.jsx';
 
 export function WaitlistRow({ entry }) {
    return (
-      <Link className="waitlist-row" to="/patient/waitlist">
-         <span className="waitlist-copy">
-            <span className="waitlist-title">
+      <Link className="dashboard-waitlist-row" to="/patient/waitlist">
+         <span className="dashboard-waitlist-copy">
+            <span className="dashboard-waitlist-title">
                <strong>{entry.providerName}</strong>
                <StatusPill status={entry.statusClass}>
                   {entry.statusLabel}
                </StatusPill>
             </span>
             <span>{entry.visitLabel}</span>
-            <span className={'waitlist-note ' + entry.status}>
-               {entry.note}
-            </span>
+            {entry.note && (
+               <span className={'dashboard-waitlist-note ' + entry.status}>
+                  {entry.note}
+               </span>
+            )}
          </span>
          <Icon name="chevron-right" />
       </Link>

@@ -18,12 +18,15 @@ const appointmentStatusLabels = {
    cancelled: 'Cancelled',
    no_show: 'No show',
 };
+const APPOINTMENTS_PER_PAGE = 10;
 
 function PatientAppointments() {
    const [appointments, setAppointments] = useState(null);
    const [hasError, setHasError] = useState(false);
    const [busyId, setBusyId] = useState(null);
    const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+   const [activeViewKey, setActiveViewKey] = useState('upcoming');
+   const [appointmentPage, setAppointmentPage] = useState(1);
    const pageRef = useRef(null);
    const { notify } = usePortalFeedback();
    usePortalPageReveal(pageRef, Boolean(appointments));
@@ -93,6 +96,56 @@ function PatientAppointments() {
       );
    }
 
+   const appointmentViews = [
+      {
+         key: 'upcoming',
+         label: 'Upcoming',
+         title: 'Upcoming',
+         emptyMessage: 'No upcoming appointments to show.',
+         appointments: appointments.upcoming,
+         showActions: true,
+      },
+      {
+         key: 'past',
+         label: 'Past',
+         title: 'Past Appointments',
+         emptyMessage: 'No past appointments to show.',
+         appointments: appointments.past,
+      },
+      {
+         key: 'cancelled',
+         label: 'Cancelled',
+         title: 'Cancelled',
+         emptyMessage: 'No cancelled appointments to show.',
+         appointments: appointments.cancelled,
+      },
+      ...(appointments.needsReview.length
+         ? [
+              {
+                 key: 'needsReview',
+                 label: 'Needs review',
+                 title: 'Needs date review',
+                 description:
+                    'A visit’s recorded status and date do not match. Clinic staff can help confirm these details.',
+                 emptyMessage: 'No appointments need date review.',
+                 appointments: appointments.needsReview,
+              },
+           ]
+         : []),
+   ];
+   const activeView =
+      appointmentViews.find((view) => view.key === activeViewKey) ||
+      appointmentViews[0];
+   const pageCount = Math.ceil(
+      activeView.appointments.length / APPOINTMENTS_PER_PAGE,
+   );
+   const currentPage = Math.min(appointmentPage, Math.max(pageCount, 1));
+   const pageStart = (currentPage - 1) * APPOINTMENTS_PER_PAGE;
+   const visibleAppointments = activeView.appointments.slice(
+      pageStart,
+      pageStart + APPOINTMENTS_PER_PAGE,
+   );
+
    return (
       <div className="centered-page appointments-page" ref={pageRef}>
          <AppointmentCancelDialog
@@ -113,37 +166,82 @@ function PatientAppointments() {
             <StatusGuide type="priorAuth" align="end" showLabel />
          </div>
 
-         <AppointmentSection
-            id="upcoming-appointments"
-            title="Upcoming"
-            emptyMessage="No upcoming appointments to show."
-            appointments={appointments.upcoming}
-            busyId={busyId}
-            onCancel={cancelAppointment}
-            showActions
-         />
-         <AppointmentSection
-            id="past-appointments"
-            title="Past Appointments"
-            emptyMessage="No past appointments to show."
-            appointments={appointments.past}
-         />
-         {appointments.cancelled.length > 0 && (
+         <div
+            className="appointment-view-filter"
+            role="group"
+            aria-label="Filter appointments by status">
+            {appointmentViews.map((view) => (
+               <button
+                  key={view.key}
+                  className="appointment-view-button"
+                  type="button"
+                  aria-pressed={activeView.key === view.key}
+                  aria-controls="appointments-results"
+                  onClick={() => {
+                     setActiveViewKey(view.key);
+                     setAppointmentPage(1);
+                  }}>
+                  {view.label}
+                  <span className="appointment-view-count">
+                     {view.appointments.length}
+                  </span>
+               </button>
+            ))}
+         </div>
+
+         <div id="appointments-results">
             <AppointmentSection
-               id="cancelled-appointments"
-               title="Cancelled"
-               description="Cancelled visits are listed separately from upcoming and past appointments."
-               appointments={appointments.cancelled}
+               id={`appointments-${activeView.key}`}
+               title={activeView.title}
+               description={activeView.description}
+               emptyMessage={activeView.emptyMessage}
+               appointments={visibleAppointments}
+               busyId={busyId}
+               onCancel={cancelAppointment}
+               showActions={Boolean(activeView.showActions)}
             />
-         )}
-         {appointments.needsReview.length > 0 && (
-            <AppointmentSection
-               id="appointments-needing-review"
-               title="Needs date review"
-               description="A visit’s recorded status and date do not match. Clinic staff can help confirm these details."
-               appointments={appointments.needsReview}
-            />
-         )}
+            {pageCount > 1 && (
+               <div className="appointments-pagination">
+                  <span aria-live="polite">
+                     Showing {pageStart + 1}–
+                     {Math.min(
+                        pageStart + APPOINTMENTS_PER_PAGE,
+                        activeView.appointments.length,
+                     )}{' '}
+                     of {activeView.appointments.length}
+                  </span>
+                  <nav aria-label="Appointment pages">
+                     <button
+                        className="button button-quiet"
+                        type="button"
+                        aria-label="Previous page"
+                        disabled={currentPage === 1}
+                        onClick={() =>
+                           setAppointmentPage(Math.max(1, currentPage - 1))
+                        }>
+                        <Icon name="chevron-left" />
+                        Previous
+                     </button>
+                     <span>
+                        Page {currentPage} of {pageCount}
+                     </span>
+                     <button
+                        className="button button-quiet"
+                        type="button"
+                        aria-label="Next page"
+                        disabled={currentPage === pageCount}
+                        onClick={() =>
+                           setAppointmentPage(
+                              Math.min(pageCount, currentPage + 1),
+                           )
+                        }>
+                        Next
+                        <Icon name="chevron-right" />
+                     </button>
+                  </nav>
+               </div>
+            )}
+         </div>
       </div>
    );
 }

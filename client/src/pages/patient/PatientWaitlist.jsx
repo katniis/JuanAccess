@@ -377,9 +377,17 @@ function PatientWaitlist() {
                   </section>
                ))}
             </div>
-         ) : !loadError ? (
-            <section className="empty-waitlist">
-               <h2>You are not on a waitlist</h2>
+         ) : !loadError && !isFormOpen ? (
+            <section
+               className="empty-waitlist"
+               aria-labelledby="empty-waitlist-title">
+               <span className="empty-waitlist-illustration" aria-hidden="true">
+                  <Icon name="calendar" />
+                  <span>
+                     <Icon name="plus" />
+                  </span>
+               </span>
+               <h2 id="empty-waitlist-title">You are not on a waitlist</h2>
                <p>Join one to hear about earlier appointments.</p>
                <button
                   className="button button-primary"

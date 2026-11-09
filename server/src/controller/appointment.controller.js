@@ -470,6 +470,7 @@ export const getMyAppointments = async (req, res) => {
       const rows = await db
          .select({
             id: appointments.id,
+            createdAt: appointments.createdAt,
             patientId: appointments.patientId,
             providerId: appointments.providerId,
             roomId: appointments.roomId,

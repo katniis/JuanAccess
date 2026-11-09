@@ -100,7 +100,19 @@ function Panel({ lines = 3, className = '' }) {
 function PatientDashboardSkeleton() {
    return (
       <div className="skeleton-page skeleton-patient-dashboard">
-         <PageHeading actions />
+         <div className="skeleton-dashboard-welcome" aria-hidden="true">
+            <div className="skeleton-dashboard-banner">
+               <div className="skeleton-row-copy">
+                  <Bone width="min(340px, 52vw)" height={27} />
+                  <Bone width="min(390px, 58vw)" height={14} />
+               </div>
+               <div className="skeleton-dashboard-mascot" />
+            </div>
+            <div className="skeleton-heading-actions">
+               <Bone width={122} height={44} radius={12} />
+               <Bone width={170} height={44} radius={12} />
+            </div>
+         </div>
          <div className="skeleton-stat-grid" aria-hidden="true">
             {[0, 1, 2].map((item) => (
                <div className="skeleton-stat-card" key={item}>
@@ -110,18 +122,11 @@ function PatientDashboardSkeleton() {
                </div>
             ))}
          </div>
-         <section className="skeleton-offer" aria-hidden="true">
-            <div>
-               <Bone width={74} height={24} radius={99} />
-               <Bone width={225} height={17} />
-               <Bone width={190} height={13} />
-            </div>
-            <div>
-               <Bone width={150} height={28} radius={9} />
-               <Bone width={116} height={39} radius={11} />
-            </div>
-         </section>
          <div className="skeleton-dashboard-panels">
+            <Panel lines={3} />
+            <Panel lines={3} />
+         </div>
+         <div className="skeleton-dashboard-panels skeleton-dashboard-lower">
             <Panel lines={3} />
             <Panel lines={3} />
          </div>
