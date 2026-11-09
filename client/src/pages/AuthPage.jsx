@@ -6,6 +6,7 @@ import {
    useSearchParams,
 } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth.js';
+import { EMAIL_FEATURES_ENABLED } from '../utils/emailFeatures.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {
@@ -60,6 +61,7 @@ function AuthPage({ mode = 'signin' }) {
    });
    const [password, setPassword] = useState('');
    const [confirmPassword, setConfirmPassword] = useState('');
+   const [rememberMe, setRememberMe] = useState(false);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
    const invitationToken = searchParams.get('token') || '';
@@ -147,7 +149,7 @@ function AuthPage({ mode = 'signin' }) {
                password,
             });
          } else {
-            user = await signIn({ email, password });
+            user = await signIn({ email, password, rememberMe });
          }
 
          const homePath = getHomePathForRole(user.role);
@@ -528,6 +530,32 @@ function AuthPage({ mode = 'signin' }) {
                            isInvitation ? 'new-password' : 'current-password'
                         }
                      />
+                  )}
+
+                  {!isSignup && !isInvitation && (
+                     <div className="auth-login-options">
+                        <label className="settings-checkbox auth-remember-me">
+                           <input
+                              type="checkbox"
+                              checked={rememberMe}
+                              onChange={(event) =>
+                                 setRememberMe(event.target.checked)
+                              }
+                           />
+                           <span>Remember me</span>
+                        </label>
+                        {EMAIL_FEATURES_ENABLED ? (
+                           <Link to="/forgot-password">Forgot password?</Link>
+                        ) : (
+                           <span
+                              className="auth-maintenance-link"
+                              title="Under maintenance"
+                              role="note"
+                              aria-label="Forgot password? Under maintenance">
+                              Forgot password?
+                           </span>
+                        )}
+                     </div>
                   )}
 
                   {isInvitation && (

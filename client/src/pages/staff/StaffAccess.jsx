@@ -4,6 +4,7 @@ import ErrorState from '../../components/ErrorState.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
+import { EMAIL_FEATURES_ENABLED } from '../../utils/emailFeatures.js';
 import {
    createStaffInvitation,
    getStaffUsers,
@@ -58,7 +59,11 @@ function StaffAccess() {
          const result = await createStaffInvitation(form);
          const link = new URL('/accept-invite', window.location.origin);
          link.searchParams.set('token', result.invitation_token);
-         setInvitation({ ...result.invitation, link: link.toString() });
+         setInvitation({
+            ...result.invitation,
+            link: link.toString(),
+            emailSent: result.email_sent,
+         });
          setForm((current) => ({
             ...current,
             firstName: '',
@@ -67,8 +72,11 @@ function StaffAccess() {
          }));
          notify({
             type: 'success',
-            message:
-               'Staff invitation created. Share the link before it expires.',
+            message: result.email_sent
+               ? 'Invitation email sent. The copyable link is also available.'
+               : EMAIL_FEATURES_ENABLED
+                 ? 'Invitation created, but delivery failed. Copy and share the link.'
+                 : 'Invitation created. Email is under maintenance; share the link manually.',
          });
       } catch (requestError) {
          setError(requestError.message);
@@ -120,9 +128,15 @@ function StaffAccess() {
             <header className="staff-card-heading">
                <div>
                   <h2>Invite a staff member</h2>
-                  <p>
-                     Links expire 48 hours after they are created. Email
-                     delivery is not configured.
+                  <p
+                     title={
+                        !EMAIL_FEATURES_ENABLED
+                           ? 'Under maintenance'
+                           : undefined
+                     }>
+                     {EMAIL_FEATURES_ENABLED
+                        ? 'Links expire 48 hours after they are created. If email delivery fails, you can copy the invitation link.'
+                        : 'Email delivery is under maintenance. Links expire after 48 hours and can be shared manually.'}
                   </p>
                </div>
             </header>
@@ -192,6 +206,13 @@ function StaffAccess() {
                   <div>
                      <strong>Invitation ready for {invitation.email}</strong>
                      <span>Expires {expiryLabel(invitation.expiresAt)}</span>
+                     <span>
+                        {invitation.emailSent
+                           ? 'Invitation email sent'
+                           : EMAIL_FEATURES_ENABLED
+                             ? 'Email not sent; share the link below'
+                             : 'Email is under maintenance; share the link below'}
+                     </span>
                   </div>
                   <label>
                      Copyable invitation link

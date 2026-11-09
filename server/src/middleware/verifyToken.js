@@ -32,6 +32,7 @@ export const verifyToken = async (req, res, next) => {
             patientId: users.patientId,
             providerId: users.providerId,
             displayName: users.displayName,
+            authVersion: users.authVersion,
          })
          .from(users)
          .where(and(eq(users.id, decoded.id), eq(users.isActive, true)))
@@ -43,7 +44,18 @@ export const verifyToken = async (req, res, next) => {
             .json({ message: 'Not authorized: user not found.' });
       }
 
-      req.user = user;
+      if ((decoded.authVersion ?? 0) !== (user.authVersion ?? 0)) {
+         return res
+            .status(401)
+            .json({ message: 'Not authorized: session expired.' });
+      }
+
+      const { authVersion, ...safeUser } = user;
+      req.user = safeUser;
+      req.auth = {
+         rememberMe: decoded.rememberMe === true,
+         authVersion: decoded.authVersion ?? 0,
+      };
       return next();
    } catch (error) {
       if (

@@ -150,6 +150,12 @@ a:focus-visible {
    background: #fff;
    border-right: 1px solid #dbe4ed;
 }
+.sidebar-heading {
+   display: flex;
+   align-items: center;
+   min-height: 101px;
+   border-bottom: 1px solid #dbe4ed;
+}
 .brand {
    display: flex;
    flex-direction: column;
@@ -158,7 +164,37 @@ a:focus-visible {
    gap: 3px;
    min-height: 101px;
    padding: 14px 18px;
-   border-bottom: 1px solid #dbe4ed;
+   border-bottom: 0;
+}
+.sidebar-heading .brand {
+   flex: 1;
+   min-height: 100px;
+}
+.sidebar-drawer {
+   display: flex;
+   flex: 1;
+   flex-direction: column;
+   min-height: 0;
+}
+.mobile-drawer-backdrop {
+   display: none;
+}
+.mobile-nav-toggle {
+   display: none;
+   place-items: center;
+   width: 44px;
+   height: 44px;
+   margin-right: 12px;
+   padding: 0;
+   border: 1px solid #dce5ee;
+   border-radius: 10px;
+   background: #fff;
+   color: #173652;
+   cursor: pointer;
+}
+.mobile-nav-toggle svg {
+   width: 20px;
+   height: 20px;
 }
 .brand-logo {
    display: block;
@@ -3432,7 +3468,9 @@ a:focus-visible {
       flex-direction: column;
    }
    .sidebar {
-      position: static;
+      position: sticky;
+      z-index: 20;
+      top: 0;
       width: 100%;
       height: auto;
       flex: 0 0 auto;
@@ -3443,6 +3481,16 @@ a:focus-visible {
       min-height: 76px;
       padding: 8px 17px;
    }
+   .sidebar-heading {
+      position: relative;
+      z-index: 3;
+      min-height: 76px;
+      padding-right: 5px;
+      background: #fff;
+   }
+   .sidebar-heading .brand {
+      min-height: 76px;
+   }
    .brand-logo {
       width: 150px;
    }
@@ -3450,17 +3498,68 @@ a:focus-visible {
       font-size: 12px;
    }
    .sidebar-nav {
-      display: flex;
+      display: grid;
       gap: 4px;
-      overflow-x: auto;
-      padding: 8px 10px 10px;
+      overflow: visible;
+      padding: 8px 12px 12px;
+      border-top: 1px solid #dbe4ed;
+   }
+   .sidebar-drawer {
+      position: fixed;
+      z-index: 2;
+      top: 76px;
+      bottom: 0;
+      left: 0;
+      width: min(320px, calc(100vw - 56px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: #fff;
+      box-shadow: 0 12px 32px #102d4c2e;
+      transform: translateX(-100%);
+      visibility: hidden;
+      transition:
+         transform 220ms ease,
+         visibility 0s linear 220ms;
+   }
+   .sidebar.mobile-menu-open .sidebar-drawer {
+      transform: translateX(0);
+      visibility: visible;
+      transition:
+         transform 220ms ease,
+         visibility 0s;
+   }
+   .mobile-drawer-backdrop {
+      position: fixed;
+      z-index: 1;
+      inset: 76px 0 0;
+      display: block;
+      padding: 0;
+      border: 0;
+      background: #102d4c66;
+      opacity: 0;
+      visibility: hidden;
+      transition:
+         opacity 180ms ease,
+         visibility 0s linear 180ms;
+   }
+   .sidebar.mobile-menu-open .mobile-drawer-backdrop {
+      opacity: 1;
+      visibility: visible;
+      transition:
+         opacity 180ms ease,
+         visibility 0s;
+   }
+   .mobile-nav-toggle {
+      display: grid;
    }
    .nav-link {
-      flex: 0 0 auto;
-      min-height: 42px;
+      width: 100%;
+      min-height: 44px;
    }
    .sidebar-account {
-      display: none;
+      display: block;
+      margin-top: 0;
+      padding: 12px 16px 14px;
    }
    .topbar {
       position: static;
@@ -3498,6 +3597,13 @@ a:focus-visible {
    }
    .stat-card {
       min-height: 122px;
+   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+   .sidebar-drawer,
+   .mobile-drawer-backdrop {
+      transition: none;
    }
 }
 
@@ -4243,6 +4349,26 @@ a:focus-visible {
 .auth-form-actions {
    display: flex;
    gap: 10px;
+}
+.auth-login-options {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 10px;
+}
+.auth-login-options > a,
+.auth-login-options > .auth-maintenance-link {
+   color: #087b98;
+   font-size: 12px;
+   font-weight: 600;
+   white-space: nowrap;
+}
+.auth-login-options > a:hover {
+   text-decoration: underline;
+}
+.auth-login-options > .auth-maintenance-link {
+   cursor: not-allowed;
+   opacity: 0.7;
 }
 .auth-form-actions .auth-submit {
    flex: 1;
@@ -6463,5 +6589,111 @@ a:focus-visible {
    }
    .staff-access-denied {
       margin: 22px 14px;
+   }
+}
+.account-settings-page {
+   display: grid;
+   width: 100%;
+   max-width: 1080px;
+   gap: 18px;
+   margin: 0 auto;
+}
+.account-settings-card {
+   overflow: hidden;
+}
+.account-settings-form {
+   display: grid;
+   gap: 16px;
+   padding: 22px 24px;
+}
+.account-settings-form h3 {
+   margin: 0;
+   color: #173652;
+   font-size: 15px;
+}
+.account-settings-list {
+   display: grid;
+}
+.account-settings-list-row {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 16px;
+   padding: 16px 24px;
+   border-bottom: 1px solid #e4ebf1;
+}
+.account-settings-list-row > div:first-child {
+   display: grid;
+   min-width: 0;
+   gap: 5px;
+}
+.account-settings-list-row strong {
+   color: #173652;
+   font-size: 14px;
+}
+.account-settings-list-row span {
+   color: #58728e;
+   font-size: 13px;
+}
+.account-settings-actions {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 9px;
+}
+.account-settings-message {
+   margin: 0;
+   padding: 11px 14px;
+   border: 1px solid #b6dfd2;
+   border-radius: 10px;
+   background: #f0faf6;
+   color: #17644a;
+   font-size: 13px;
+   line-height: 1.45;
+}
+.email-maintenance-note {
+   margin: 0;
+   padding: 0 24px 18px;
+   color: #80601d;
+   font-size: 13px;
+   line-height: 1.45;
+}
+.auth-card .email-maintenance-note {
+   padding: 0;
+}
+.settings-checkbox {
+   display: flex;
+   align-items: center;
+   gap: 10px;
+   padding: 18px 24px;
+   color: #294866;
+   font-size: 14px;
+   cursor: pointer;
+}
+.settings-checkbox input {
+   width: 18px;
+   height: 18px;
+   margin: 0;
+   accent-color: #08728d;
+}
+.settings-checkbox:has(input:disabled) {
+   cursor: not-allowed;
+}
+.auth-remember-me {
+   padding: 0;
+   gap: 8px;
+   font-size: 13px;
+   white-space: nowrap;
+}
+.account-settings-coverage-form {
+   border-top: 1px solid #e4ebf1;
+}
+@media (max-width: 680px) {
+   .account-settings-form {
+      padding: 17px;
+   }
+   .account-settings-list-row {
+      align-items: flex-start;
+      flex-direction: column;
+      padding: 16px 17px;
    }
 }

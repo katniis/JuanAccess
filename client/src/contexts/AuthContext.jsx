@@ -59,6 +59,12 @@ function AuthProvider({ children }) {
       return result.user;
    };
 
+   const refreshUser = async () => {
+      const result = await getCurrentUser();
+      setUser(result.user);
+      return result.user;
+   };
+
    const registerPatient = async (details) => {
       const result = await registerPatientRequest(details);
       setUser(result.user);
@@ -92,6 +98,7 @@ function AuthProvider({ children }) {
             authError,
             retryAuthentication,
             signIn,
+            refreshUser,
             registerPatient,
             acceptStaffInvitation,
             signOut,

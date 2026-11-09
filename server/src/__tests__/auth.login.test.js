@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import {
    startServer,
    readJson,
@@ -107,6 +108,23 @@ describe('POST /auth/login', () => {
          displayName: 'Pat Patient',
       });
       expect(body.user).not.toHaveProperty('passwordHash');
-      expect(getCookie(res, 'token')).toBeTruthy();
+      const token = getCookie(res, 'token');
+      expect(token).toBeTruthy();
+      expect(res.headers.get('set-cookie')).not.toMatch(/max-age=/i);
+      expect(jwt.decode(token).rememberMe).toBe(false);
+   });
+
+   it('persists the cookie for 30 days when Remember Me is selected', async () => {
+      mockQueryQueue.push([userRow]);
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'correct-horse',
+         rememberMe: true,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('set-cookie')).toMatch(/max-age=2592000/i);
+      expect(jwt.decode(getCookie(res, 'token')).rememberMe).toBe(true);
    });
 });

@@ -24,6 +24,7 @@ function PatientLayout() {
    const { pathname } = useLocation();
    const navigate = useNavigate();
    const { user, signOut } = useAuth();
+   const [mobileNavOpen, setMobileNavOpen] = useState(false);
    const [accountMenuPath, setAccountMenuPath] = useState(null);
    const accountMenuOpen = accountMenuPath === pathname;
    const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -32,10 +33,14 @@ function PatientLayout() {
    const [notificationsError, setNotificationsError] = useState('');
    const accountAreaRef = useRef(null);
    const accountButtonRef = useRef(null);
+   const mobileNavButtonRef = useRef(null);
+   const mobileNavFirstLinkRef = useRef(null);
+   const sidebarRef = useRef(null);
    const notificationsAreaRef = useRef(null);
    const notificationsButtonRef = useRef(null);
    const currentPage =
-      navigation.find((item) => item.path === pathname)?.label ?? 'Dashboard';
+      navigation.find((item) => item.path === pathname)?.label ??
+      (pathname === '/patient/settings' ? 'Settings' : 'Dashboard');
    const displayName = user?.displayName?.trim() || 'Patient';
    const initials = displayName
       .split(/\s+/)
@@ -45,9 +50,69 @@ function PatientLayout() {
       .slice(0, 2)
       .toUpperCase();
 
+   useEffect(() => {
+      if (mobileNavOpen) mobileNavFirstLinkRef.current?.focus();
+   }, [mobileNavOpen]);
+
+   useEffect(() => {
+      const closeOnDesktop = (event) => {
+         if (event.matches) setMobileNavOpen(false);
+      };
+      const desktopViewport = window.matchMedia('(min-width: 901px)');
+      desktopViewport.addEventListener('change', closeOnDesktop);
+      return () =>
+         desktopViewport.removeEventListener('change', closeOnDesktop);
+   }, []);
+
+   useEffect(() => {
+      if (!mobileNavOpen) return undefined;
+
+      const closeOnOutsideClick = (event) => {
+         if (!sidebarRef.current?.contains(event.target))
+            setMobileNavOpen(false);
+      };
+      const closeOnEscape = (event) => {
+         if (event.key === 'Escape') {
+            setMobileNavOpen(false);
+            mobileNavButtonRef.current?.focus();
+         }
+      };
+
+      document.addEventListener('pointerdown', closeOnOutsideClick);
+      document.addEventListener('keydown', closeOnEscape);
+      return () => {
+         document.removeEventListener('pointerdown', closeOnOutsideClick);
+         document.removeEventListener('keydown', closeOnEscape);
+      };
+   }, [mobileNavOpen]);
+
    const handleSignOut = async () => {
       await signOut();
       navigate('/login', { replace: true });
+   };
+
+   const handleDrawerKeyDown = (event) => {
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+         sidebarRef.current?.querySelectorAll(
+            'a[href], button:not([disabled])',
+         ) ?? [],
+      ).filter(
+         (element) =>
+            element.tabIndex >= 0 &&
+            element.getClientRects().length > 0 &&
+            !element.closest('[hidden]'),
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+         event.preventDefault();
+         last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+         event.preventDefault();
+         first?.focus();
+      }
    };
 
    const loadNotifications = async () => {
@@ -121,75 +186,123 @@ function PatientLayout() {
    return (
       <PortalFeedbackProvider>
          <div className="patient-app">
-            <aside className="sidebar">
-               <Link
-                  className="brand"
-                  to="/patient"
-                  aria-label="JuanAccess Patient Portal home">
-                  <img
-                     className="brand-logo"
-                     src="/juanaccess-logo.svg"
-                     alt=""
-                  />
-                  <span className="brand-subtitle">Patient Portal</span>
-               </Link>
-               <nav className="sidebar-nav" aria-label="Patient navigation">
-                  {navigation.map((item) => (
-                     <NavLink
-                        key={item.path}
-                        to={item.path}
-                        end={item.end}
-                        className={({ isActive }) =>
-                           'nav-link' + (isActive ? ' active' : '')
-                        }>
-                        <Icon name={item.icon} />
-                        <span>{item.label}</span>
-                     </NavLink>
-                  ))}
-               </nav>
-               <div className="sidebar-account" ref={accountAreaRef}>
-                  <div
-                     className="account-menu"
-                     id="patient-account-menu"
-                     role="group"
-                     aria-label="Patient account options"
-                     hidden={!accountMenuOpen}>
-                     <Link to="/patient/settings">Settings</Link>
+            <aside
+               ref={sidebarRef}
+               role={mobileNavOpen ? 'dialog' : undefined}
+               aria-modal={mobileNavOpen || undefined}
+               aria-label={
+                  mobileNavOpen ? 'Patient navigation menu' : undefined
+               }
+               onKeyDown={handleDrawerKeyDown}
+               className={
+                  mobileNavOpen ? 'sidebar mobile-menu-open' : 'sidebar'
+               }>
+               <div className="sidebar-heading">
+                  <Link
+                     className="brand"
+                     to="/patient"
+                     aria-label="JuanAccess Patient Portal home"
+                     onClick={() => setMobileNavOpen(false)}>
+                     <img
+                        className="brand-logo"
+                        src="/juanaccess-logo.svg"
+                        alt=""
+                     />
+                     <span className="brand-subtitle">Patient Portal</span>
+                  </Link>
+                  <button
+                     className="mobile-nav-toggle"
+                     type="button"
+                     ref={mobileNavButtonRef}
+                     aria-label={
+                        mobileNavOpen
+                           ? 'Close navigation menu'
+                           : 'Open navigation menu'
+                     }
+                     aria-expanded={mobileNavOpen}
+                     aria-controls="patient-sidebar-drawer"
+                     onClick={() => setMobileNavOpen((open) => !open)}>
+                     <Icon name={mobileNavOpen ? 'close' : 'menu'} />
+                  </button>
+               </div>
+               <button
+                  className="mobile-drawer-backdrop"
+                  type="button"
+                  tabIndex={-1}
+                  aria-label="Close navigation menu"
+                  onClick={() => {
+                     setMobileNavOpen(false);
+                     mobileNavButtonRef.current?.focus();
+                  }}
+               />
+               <div className="sidebar-drawer" id="patient-sidebar-drawer">
+                  <nav
+                     className="sidebar-nav"
+                     id="patient-sidebar-nav"
+                     aria-label="Patient navigation">
+                     {navigation.map((item, index) => (
+                        <NavLink
+                           key={item.path}
+                           ref={index === 0 ? mobileNavFirstLinkRef : undefined}
+                           to={item.path}
+                           end={item.end}
+                           className={({ isActive }) =>
+                              'nav-link' + (isActive ? ' active' : '')
+                           }
+                           onClick={() => setMobileNavOpen(false)}>
+                           <Icon name={item.icon} />
+                           <span>{item.label}</span>
+                        </NavLink>
+                     ))}
+                  </nav>
+                  <div className="sidebar-account" ref={accountAreaRef}>
+                     <div
+                        className="account-menu"
+                        id="patient-account-menu"
+                        role="group"
+                        aria-label="Patient account options"
+                        hidden={!accountMenuOpen}>
+                        <Link
+                           to="/patient/settings"
+                           onClick={() => setMobileNavOpen(false)}>
+                           Settings
+                        </Link>
+                        <button
+                           className="account-menu-signout"
+                           type="button"
+                           onClick={() => void handleSignOut()}>
+                           Sign out
+                        </button>
+                     </div>
                      <button
-                        className="account-menu-signout"
+                        className="account-button"
+                        type="button"
+                        ref={accountButtonRef}
+                        aria-label={displayName + ', patient account'}
+                        aria-expanded={accountMenuOpen}
+                        aria-controls="patient-account-menu"
+                        onClick={() =>
+                           setAccountMenuPath(accountMenuOpen ? null : pathname)
+                        }>
+                        <span className="avatar">{initials}</span>
+                        <span className="account-copy">
+                           <strong>{displayName}</strong>
+                           <span>Patient</span>
+                        </span>
+                        <Icon name="chevron-down" />
+                     </button>
+                     <button
+                        className="signout-link"
                         type="button"
                         onClick={() => void handleSignOut()}>
+                        <Icon name="signout" />
                         Sign out
                      </button>
                   </div>
-                  <button
-                     className="account-button"
-                     type="button"
-                     ref={accountButtonRef}
-                     aria-label={displayName + ', patient account'}
-                     aria-expanded={accountMenuOpen}
-                     aria-controls="patient-account-menu"
-                     onClick={() =>
-                        setAccountMenuPath(accountMenuOpen ? null : pathname)
-                     }>
-                     <span className="avatar">{initials}</span>
-                     <span className="account-copy">
-                        <strong>{displayName}</strong>
-                        <span>Patient</span>
-                     </span>
-                     <Icon name="chevron-down" />
-                  </button>
-                  <button
-                     className="signout-link"
-                     type="button"
-                     onClick={() => void handleSignOut()}>
-                     <Icon name="signout" />
-                     Sign out
-                  </button>
                </div>
             </aside>
 
-            <div className="main-column">
+            <div className="main-column" inert={mobileNavOpen}>
                <header className="topbar">
                   <span className="topbar-title">{currentPage}</span>
                   <div

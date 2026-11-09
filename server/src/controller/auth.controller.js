@@ -1,30 +1,42 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { patients } from '../db/schema/patients.js';
 import { providers } from '../db/schema/providers.js';
 import { users } from '../db/schema/users.js';
 import { userInvitations } from '../db/schema/userInvitations.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
+import { accountActionTokens } from '../db/schema/accountActionTokens.js';
+import { notifications } from '../db/schema/notifications.js';
 import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
+import {
+   isEmailDeliveryEnabled,
+   sendEmail,
+} from '../services/email.service.js';
 
 const cookieOptions = {
    httpOnly: true,
    secure: process.env.NODE_ENV === 'production',
    sameSite: 'strict',
+};
+
+const persistentCookieOptions = {
+   ...cookieOptions,
    maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
-const generateToken = (id) => {
+const generateToken = (id, authVersion = 0, rememberMe = false) => {
    if (!process.env.JWT_SECRET) {
       throw new Error(
          'JWT_SECRET is required to create authentication tokens.',
       );
    }
 
-   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+   return jwt.sign({ id, authVersion, rememberMe }, process.env.JWT_SECRET, {
+      expiresIn: '30d',
+   });
 };
 
 const passwordRounds = 10;
@@ -311,7 +323,7 @@ export const acceptStaffInvitation = async (req, res) => {
 
 export const login = async (req, res) => {
    try {
-      const { email, password } = req.body ?? {};
+      const { email, password, rememberMe = false } = req.body ?? {};
       if (!email || !password) {
          return res
             .status(400)
@@ -323,11 +335,612 @@ export const login = async (req, res) => {
          return res.status(401).json({ message: 'Invalid credentials.' });
       }
 
-      res.cookie('token', generateToken(user.id), cookieOptions);
+      const shouldRemember = rememberMe === true;
+      res.cookie(
+         'token',
+         generateToken(user.id, user.authVersion ?? 0, shouldRemember),
+         shouldRemember ? persistentCookieOptions : cookieOptions,
+      );
       return res.json({ user: safeUser(user) });
    } catch (error) {
       console.error('Login failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+const settingsColumns = {
+   email: users.email,
+   role: users.role,
+   displayName: users.displayName,
+   emailNotificationsEnabled: users.emailNotificationsEnabled,
+   firstName: patients.firstName,
+   lastName: patients.lastName,
+   dateOfBirth: patients.dateOfBirth,
+   gender: patients.gender,
+   contactPhone: patients.contactPhone,
+   address: patients.address,
+};
+
+async function loadSettings(userId) {
+   const [row] = await db
+      .select(settingsColumns)
+      .from(users)
+      .leftJoin(patients, eq(patients.id, users.patientId))
+      .where(eq(users.id, userId))
+      .limit(1);
+   if (!row) return null;
+   const {
+      id: _id,
+      firstName,
+      lastName,
+      dateOfBirth,
+      gender,
+      contactPhone,
+      address,
+      ...account
+   } = row;
+   return {
+      ...account,
+      emailNotificationsEnabled: account.emailNotificationsEnabled !== false,
+      profile:
+         account.role === 'patient'
+            ? {
+                 firstName,
+                 lastName,
+                 dateOfBirth,
+                 gender,
+                 contactPhone,
+                 address,
+              }
+            : null,
+   };
+}
+
+export const getSettings = async (req, res) => {
+   try {
+      const settings = await loadSettings(req.user.id);
+      return settings
+         ? res.json({ settings })
+         : res.status(404).json({ error: 'Account not found.' });
+   } catch (error) {
+      console.error('Failed to load account settings:', error);
+      return res
+         .status(500)
+         .json({ error: 'Account settings could not be loaded.' });
+   }
+};
+
+export const patchSettings = async (req, res) => {
+   const body = req.body ?? {};
+   if (
+      Object.hasOwn(body, 'emailNotificationsEnabled') &&
+      !isEmailDeliveryEnabled()
+   ) {
+      return res
+         .status(503)
+         .json({ error: 'Email features are under maintenance.' });
+   }
+   if (Object.hasOwn(body, 'email'))
+      return res
+         .status(400)
+         .json({ error: 'Use email confirmation to change your login email.' });
+   if (
+      Object.hasOwn(body, 'dateOfBirth') ||
+      Object.hasOwn(body, 'date_of_birth')
+   )
+      return res
+         .status(400)
+         .json({ error: 'Date of birth cannot be changed here.' });
+
+   const patientFields = [
+      'firstName',
+      'lastName',
+      'gender',
+      'contactPhone',
+      'address',
+   ];
+   const staffFields = ['displayName'];
+   const allowed = new Set([
+      'emailNotificationsEnabled',
+      ...(req.user.role === 'patient' ? patientFields : staffFields),
+   ]);
+   if (
+      !Object.keys(body).length ||
+      Object.keys(body).some((field) => !allowed.has(field)) ||
+      (body.emailNotificationsEnabled !== undefined &&
+         typeof body.emailNotificationsEnabled !== 'boolean')
+   ) {
+      return res
+         .status(400)
+         .json({ error: 'Settings contain invalid fields.' });
+   }
+
+   const patientValues = {};
+   for (const field of patientFields) {
+      if (body[field] === undefined) continue;
+      const maxLength =
+         field === 'firstName' || field === 'lastName'
+            ? 100
+            : field === 'gender'
+              ? 20
+              : field === 'contactPhone'
+                ? 30
+                : 1000;
+      const value = body[field];
+      if (typeof value !== 'string' || value.trim().length > maxLength) {
+         return res.status(400).json({ error: 'Profile details are invalid.' });
+      }
+      if ((field === 'firstName' || field === 'lastName') && !value.trim()) {
+         return res.status(400).json({ error: 'Name fields cannot be blank.' });
+      }
+      patientValues[field] = value.trim() || null;
+   }
+   if (
+      body.displayName !== undefined &&
+      (typeof body.displayName !== 'string' ||
+         !body.displayName.trim() ||
+         body.displayName.trim().length > 150)
+   ) {
+      return res.status(400).json({ error: 'Display name is invalid.' });
+   }
+
+   try {
+      await db.transaction(async (tx) => {
+         if (req.user.role === 'patient' && Object.keys(patientValues).length) {
+            const [current] = await tx
+               .select({
+                  firstName: patients.firstName,
+                  lastName: patients.lastName,
+               })
+               .from(patients)
+               .where(eq(patients.id, req.user.patientId))
+               .limit(1);
+            if (!current) throw new Error('patient_profile_not_found');
+            await tx
+               .update(patients)
+               .set(patientValues)
+               .where(eq(patients.id, req.user.patientId));
+            await tx
+               .update(users)
+               .set({
+                  displayName: `${patientValues.firstName ?? current.firstName} ${patientValues.lastName ?? current.lastName}`,
+               })
+               .where(eq(users.id, req.user.id));
+         }
+         if (body.displayName !== undefined) {
+            await tx
+               .update(users)
+               .set({ displayName: body.displayName.trim() })
+               .where(eq(users.id, req.user.id));
+         }
+         if (body.emailNotificationsEnabled !== undefined) {
+            await tx
+               .update(users)
+               .set({
+                  emailNotificationsEnabled: body.emailNotificationsEnabled,
+               })
+               .where(eq(users.id, req.user.id));
+            if (!body.emailNotificationsEnabled) {
+               await tx
+                  .update(notifications)
+                  .set({
+                     emailStatus: 'skipped',
+                     emailNextAttemptAt: null,
+                     emailLastError: null,
+                  })
+                  .where(
+                     and(
+                        eq(notifications.userId, req.user.id),
+                        or(
+                           eq(notifications.emailStatus, 'pending'),
+                           eq(notifications.emailStatus, 'failed'),
+                        ),
+                     ),
+                  );
+            }
+         }
+      });
+      const settings = await loadSettings(req.user.id);
+      return res.json({ settings });
+   } catch (error) {
+      console.error('Failed to update account settings:', error);
+      return res
+         .status(500)
+         .json({ error: 'Account settings could not be saved.' });
+   }
+};
+
+export const changePassword = async (req, res) => {
+   const currentPassword = req.body?.currentPassword;
+   const newPassword = req.body?.newPassword;
+   if (
+      typeof currentPassword !== 'string' ||
+      typeof newPassword !== 'string' ||
+      newPassword.length < 8
+   ) {
+      return res.status(400).json({
+         error: 'Enter your current password and a new password of at least 8 characters.',
+      });
+   }
+   try {
+      const [user] = await db
+         .select({
+            passwordHash: users.passwordHash,
+            authVersion: users.authVersion,
+         })
+         .from(users)
+         .where(eq(users.id, req.user.id))
+         .limit(1);
+      if (
+         !user ||
+         !(await bcrypt.compare(currentPassword, user.passwordHash))
+      ) {
+         return res
+            .status(400)
+            .json({ error: 'Current password is incorrect.' });
+      }
+      const passwordHash = await bcrypt.hash(newPassword, passwordRounds);
+      const [updated] = await db
+         .update(users)
+         .set({ passwordHash, authVersion: sql`${users.authVersion} + 1` })
+         .where(eq(users.id, req.user.id))
+         .returning({ authVersion: users.authVersion });
+      const authVersion = updated?.authVersion ?? (user.authVersion ?? 0) + 1;
+      const rememberMe = req.auth?.rememberMe === true;
+      res.cookie(
+         'token',
+         generateToken(req.user.id, authVersion, rememberMe),
+         rememberMe ? persistentCookieOptions : cookieOptions,
+      );
+      return res.json({ message: 'Password changed successfully.' });
+   } catch (error) {
+      console.error('Failed to change password:', error);
+      return res.status(500).json({ error: 'Password could not be changed.' });
+   }
+};
+
+const requestLimits = new Map();
+const publicActionMessage =
+   'If an account matches that email, a reset link will be sent.';
+
+function allowActionRequest(req, action, max = 5) {
+   const now = Date.now();
+   for (const [key, limit] of requestLimits) {
+      if (limit.expiresAt <= now) requestLimits.delete(key);
+   }
+   const key = `${action}:${req.ip || req.socket?.remoteAddress || 'unknown'}`;
+   const limit = requestLimits.get(key);
+   if (!limit || limit.expiresAt <= now) {
+      requestLimits.set(key, { count: 1, expiresAt: now + 15 * 60 * 1000 });
+      return true;
+   }
+   if (limit.count >= max) return false;
+   limit.count += 1;
+   return true;
+}
+
+function actionUrl(path, token) {
+   const origin = process.env.CLIENT_ORIGIN?.trim();
+   if (!origin) throw new Error('CLIENT_ORIGIN is not configured');
+   const url = new URL(path, origin);
+   url.searchParams.set('token', token);
+   return url.toString();
+}
+
+function hashActionToken(token) {
+   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+export const forgotPassword = async (req, res) => {
+   if (!allowActionRequest(req, 'forgot-password')) {
+      return res
+         .status(429)
+         .json({ error: 'Too many requests. Try again later.' });
+   }
+   const email =
+      typeof req.body?.email === 'string'
+         ? req.body.email.trim().toLowerCase()
+         : '';
+   if (
+      !email ||
+      email.length > 255 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+   ) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+   }
+   if (!isEmailDeliveryEnabled()) {
+      return res.json({
+         message:
+            'Password recovery is under maintenance. Please try again later.',
+      });
+   }
+   try {
+      const user = await findUserByEmail(email);
+      if (user) {
+         const token = crypto.randomBytes(32).toString('hex');
+         const [{ id } = {}] = await db.transaction(async (tx) => {
+            await tx
+               .update(accountActionTokens)
+               .set({ consumedAt: new Date() })
+               .where(
+                  and(
+                     eq(accountActionTokens.userId, user.id),
+                     eq(accountActionTokens.purpose, 'password_reset'),
+                     isNull(accountActionTokens.consumedAt),
+                  ),
+               );
+            return tx
+               .insert(accountActionTokens)
+               .values({
+                  userId: user.id,
+                  purpose: 'password_reset',
+                  tokenHash: hashActionToken(token),
+                  expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+               })
+               .returning({ id: accountActionTokens.id });
+         });
+         void sendEmail({
+            to: email,
+            subject: 'Reset your JuanAccess password',
+            text: `Use this link within 30 minutes to reset your password: ${actionUrl('/reset-password', token)}`,
+            idempotencyKey: `account-action/${id}`,
+         }).catch(() => console.error('Password reset email delivery failed.'));
+      }
+      return res.json({ message: publicActionMessage });
+   } catch (error) {
+      console.error('Password reset request could not be processed:', error);
+      return res.json({ message: publicActionMessage });
+   }
+};
+
+export const resetPassword = async (req, res) => {
+   if (!isEmailDeliveryEnabled())
+      return res
+         .status(503)
+         .json({ error: 'Email features are under maintenance.' });
+   const token = typeof req.body?.token === 'string' ? req.body.token : '';
+   const password =
+      typeof req.body?.password === 'string' ? req.body.password : '';
+   if (token.length < 16 || token.length > 256 || password.length < 8) {
+      return res
+         .status(400)
+         .json({ error: 'The reset link or password is invalid.' });
+   }
+   if (!allowActionRequest(req, 'reset-password', 10)) {
+      return res
+         .status(429)
+         .json({ error: 'Too many requests. Try again later.' });
+   }
+   try {
+      const passwordHash = await bcrypt.hash(password, passwordRounds);
+      const userId = await db.transaction(async (tx) => {
+         const [action] = await tx
+            .select()
+            .from(accountActionTokens)
+            .where(
+               and(
+                  eq(accountActionTokens.tokenHash, hashActionToken(token)),
+                  eq(accountActionTokens.purpose, 'password_reset'),
+                  isNull(accountActionTokens.consumedAt),
+                  gt(accountActionTokens.expiresAt, new Date()),
+               ),
+            )
+            .limit(1);
+         if (!action) return null;
+         const [consumed] = await tx
+            .update(accountActionTokens)
+            .set({ consumedAt: new Date() })
+            .where(
+               and(
+                  eq(accountActionTokens.id, action.id),
+                  isNull(accountActionTokens.consumedAt),
+                  gt(accountActionTokens.expiresAt, new Date()),
+               ),
+            )
+            .returning({ id: accountActionTokens.id });
+         if (!consumed) return null;
+         const [user] = await tx
+            .update(users)
+            .set({ passwordHash, authVersion: sql`${users.authVersion} + 1` })
+            .where(eq(users.id, action.userId))
+            .returning({ id: users.id });
+         return user?.id ?? null;
+      });
+      return userId
+         ? res.json({ message: 'Password reset successfully. Please sign in.' })
+         : res
+              .status(400)
+              .json({ error: 'The reset link is invalid or expired.' });
+   } catch (error) {
+      console.error('Password reset failed:', error);
+      return res.status(500).json({ error: 'Password could not be reset.' });
+   }
+};
+
+export const requestEmailChange = async (req, res) => {
+   if (!isEmailDeliveryEnabled())
+      return res
+         .status(503)
+         .json({ error: 'Email features are under maintenance.' });
+   const email =
+      typeof req.body?.newEmail === 'string'
+         ? req.body.newEmail.trim().toLowerCase()
+         : '';
+   const password =
+      typeof req.body?.password === 'string' ? req.body.password : '';
+   if (
+      !email ||
+      email.length > 255 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !password
+   ) {
+      return res
+         .status(400)
+         .json({ error: 'Enter a valid new email and your current password.' });
+   }
+   try {
+      const [user] = await db
+         .select({ passwordHash: users.passwordHash, email: users.email })
+         .from(users)
+         .where(eq(users.id, req.user.id))
+         .limit(1);
+      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+         return res
+            .status(400)
+            .json({ error: 'Current password is incorrect.' });
+      }
+      if (email === user.email.toLowerCase()) {
+         return res
+            .status(400)
+            .json({ error: 'Enter a different email address.' });
+      }
+      const [existing] = await db
+         .select({ id: users.id })
+         .from(users)
+         .where(eq(users.email, email))
+         .limit(1);
+      if (existing)
+         return res.status(409).json({ error: 'Email is already in use.' });
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const [{ id } = {}] = await db.transaction(async (tx) => {
+         await tx
+            .update(accountActionTokens)
+            .set({ consumedAt: new Date() })
+            .where(
+               and(
+                  eq(accountActionTokens.userId, req.user.id),
+                  eq(accountActionTokens.purpose, 'email_change'),
+                  isNull(accountActionTokens.consumedAt),
+               ),
+            );
+         return tx
+            .insert(accountActionTokens)
+            .values({
+               userId: req.user.id,
+               purpose: 'email_change',
+               tokenHash: hashActionToken(token),
+               pendingEmail: email,
+               expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            })
+            .returning({ id: accountActionTokens.id });
+      });
+      try {
+         await sendEmail({
+            to: email,
+            subject: 'Confirm your JuanAccess email address',
+            text: `Use this link within 30 minutes to confirm this email address: ${actionUrl('/confirm-email', token)}`,
+            idempotencyKey: `account-action/${id}`,
+         });
+      } catch {
+         return res.status(503).json({
+            error: 'The confirmation email could not be sent. Please try again.',
+         });
+      }
+      return res.json({
+         message: 'Check your new inbox to confirm the email change.',
+      });
+   } catch (error) {
+      console.error('Email change request failed:', error);
+      return res
+         .status(500)
+         .json({ error: 'Email change could not be requested.' });
+   }
+};
+
+export const confirmEmailChange = async (req, res) => {
+   if (!isEmailDeliveryEnabled())
+      return res
+         .status(503)
+         .json({ error: 'Email features are under maintenance.' });
+   const token = typeof req.body?.token === 'string' ? req.body.token : '';
+   if (token.length < 16 || token.length > 256) {
+      return res
+         .status(400)
+         .json({ error: 'The confirmation link is invalid or expired.' });
+   }
+   try {
+      const result = await db.transaction(async (tx) => {
+         const [action] = await tx
+            .select({
+               id: accountActionTokens.id,
+               userId: accountActionTokens.userId,
+               pendingEmail: accountActionTokens.pendingEmail,
+               expiresAt: accountActionTokens.expiresAt,
+               consumedAt: accountActionTokens.consumedAt,
+               currentEmail: users.email,
+               patientId: users.patientId,
+            })
+            .from(accountActionTokens)
+            .innerJoin(users, eq(users.id, accountActionTokens.userId))
+            .where(
+               and(
+                  eq(accountActionTokens.tokenHash, hashActionToken(token)),
+                  eq(accountActionTokens.purpose, 'email_change'),
+                  isNull(accountActionTokens.consumedAt),
+                  gt(accountActionTokens.expiresAt, new Date()),
+               ),
+            )
+            .limit(1);
+         if (!action) return null;
+         const [consumed] = await tx
+            .update(accountActionTokens)
+            .set({ consumedAt: new Date() })
+            .where(
+               and(
+                  eq(accountActionTokens.id, action.id),
+                  isNull(accountActionTokens.consumedAt),
+                  gt(accountActionTokens.expiresAt, new Date()),
+               ),
+            )
+            .returning({ id: accountActionTokens.id });
+         if (!consumed) return null;
+         const [updated] = await tx
+            .update(users)
+            .set({ email: action.pendingEmail })
+            .where(eq(users.id, action.userId))
+            .returning({ id: users.id });
+         if (!updated) return null;
+         if (action.patientId) {
+            await tx
+               .update(patients)
+               .set({ contactEmail: action.pendingEmail })
+               .where(
+                  and(
+                     eq(patients.id, action.patientId),
+                     eq(patients.contactEmail, action.currentEmail),
+                  ),
+               );
+         }
+         return {
+            oldEmail: action.currentEmail,
+            newEmail: action.pendingEmail,
+            userId: action.userId,
+            actionId: action.id,
+         };
+      });
+      if (!result)
+         return res
+            .status(400)
+            .json({ error: 'The confirmation link is invalid or expired.' });
+      try {
+         await sendEmail({
+            to: result.oldEmail,
+            subject: 'Your JuanAccess login email was changed',
+            text: 'The login email for your JuanAccess account was changed. If you did not make this change, contact the clinic.',
+            idempotencyKey: `email-change-confirmed/${result.actionId}`,
+         });
+      } catch {
+         console.error('Email change security notice delivery failed.');
+      }
+      return res.json({ message: 'Email address confirmed successfully.' });
+   } catch (error) {
+      if (error?.code === '23505')
+         return res.status(409).json({ error: 'Email is already in use.' });
+      console.error('Email change confirmation failed:', error);
+      return res
+         .status(500)
+         .json({ error: 'Email address could not be confirmed.' });
    }
 };
 

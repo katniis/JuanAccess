@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    appeals,
@@ -25,7 +25,7 @@ import {
    staffCancelAppointment,
    staffRescheduleAppointment,
 } from '../services/staff.service.js';
-import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
+import { verifyCoverage } from '../services/insurance-verification.service.js';
 import {
    listAppointmentProcedures,
    listDisputes,
@@ -1500,85 +1500,15 @@ export const verifyCoverageStaff = async (req, res) => {
    }
 
    try {
-      const status = (
-         await insurerService.verifyEligibility({
-            eligibilityStatus: requestedStatus,
-         })
-      ).status;
-      const entry = await db.transaction(async (tx) => {
-         const [updated] = await tx
-            .update(patientCoverage)
-            .set({
-               status,
-               verifiedBy: req.user.id,
-               verifiedAt: new Date(),
-               updatedAt: new Date(),
-            })
-            .where(eq(patientCoverage.id, coverageId))
-            .returning({
-               id: patientCoverage.id,
-               patientId: patientCoverage.patientId,
-               verifiedAt: patientCoverage.verifiedAt,
-            });
-
-         if (!updated) return null;
-
-         await notifyPatient(
-            tx,
-            updated.patientId,
-            'coverage_simulation',
-            `Your insurance coverage was simulated as ${status}.`,
-         );
-
-         // Cascade status update to patient's upcoming scheduled appointments
-         const upcoming = await tx
-            .select({
-               id: appointments.id,
-               scheduledStart: appointments.scheduledStart,
-            })
-            .from(appointments)
-            .where(
-               and(
-                  eq(appointments.patientId, updated.patientId),
-                  eq(appointments.status, 'scheduled'),
-                  gte(appointments.scheduledStart, new Date()),
-               ),
-            );
-
-         for (const appointment of upcoming) {
-            const insuranceStatus = await getCoverageStatusForAppointment(
-               tx,
-               updated.patientId,
-               appointment.scheduledStart,
-            );
-            await tx
-               .update(appointments)
-               .set({ insuranceStatus, updatedAt: new Date() })
-               .where(eq(appointments.id, appointment.id));
-         }
-
-         return {
-            id: updated.id,
-            patientId: updated.patientId,
-            status,
-            verifiedAt: updated.verifiedAt,
-         };
+      const entry = await verifyCoverage({
+         coverageId,
+         requestedStatus,
+         userId: req.user.id,
       });
-
-      if (!entry) {
+      if (!entry)
          return res.status(404).json({ error: 'Coverage record not found' });
-      }
-
-      void recordAudit({
-         entityType: 'patient_coverage',
-         entityId: entry.id,
-         action: 'coverage_simulation',
-         changedBy: req.user.id,
-         newValue: { status: entry.status, source: 'local_plan' },
-      });
-
       return res.status(200).json({
-         message: `Insurance coverage verified as ${status} (simulated)`,
+         message: `Insurance coverage verified as ${entry.status} (simulated)`,
          coverage: entry,
       });
    } catch (error) {

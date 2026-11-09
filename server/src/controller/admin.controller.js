@@ -3,6 +3,10 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { recordAudit } from '../services/audit.service.js';
 import {
+   isEmailDeliveryEnabled,
+   sendEmail,
+} from '../services/email.service.js';
+import {
    equipment,
    feeSchedule,
    insurancePlans,
@@ -63,6 +67,7 @@ export async function createStaffInvitation(req, res) {
    const lastName = clean(req.body?.last_name, 100);
    if (
       !email ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       !firstName ||
       !lastName ||
       !['staff', 'staff_admin'].includes(role)
@@ -98,7 +103,32 @@ export async function createStaffInvitation(req, res) {
             email: userInvitations.email,
             expiresAt: userInvitations.expiresAt,
          });
-      return res.status(201).json({ invitation, invitation_token: token });
+      let emailSent = false;
+      try {
+         if (!isEmailDeliveryEnabled()) {
+            return res.status(201).json({
+               invitation,
+               invitation_token: token,
+               email_sent: false,
+            });
+         }
+         const origin = process.env.CLIENT_ORIGIN?.trim();
+         if (!origin) throw new Error('CLIENT_ORIGIN is not configured');
+         const link = new URL('/accept-invite', origin);
+         link.searchParams.set('token', token);
+         await sendEmail({
+            to: email,
+            subject: 'Your JuanAccess staff invitation',
+            text: `Hello ${firstName},\n\nAn administrator invited you to join JuanAccess. Accept the invitation within 48 hours: ${link.toString()}`,
+            idempotencyKey: `staff-invitation/${invitation.id}`,
+         });
+         emailSent = true;
+      } catch {
+         console.error('Staff invitation email delivery failed.');
+      }
+      return res
+         .status(201)
+         .json({ invitation, invitation_token: token, email_sent: emailSent });
    } catch (error) {
       console.error('Failed to create staff invitation:', error);
       return res

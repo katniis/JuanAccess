@@ -769,17 +769,17 @@ describe('Staff Backend Routes & Controller', () => {
                insurerName: 'PhilHealth',
             },
          ];
-         mockQueryQueue.push([staffUser], unverified);
+         mockQueryQueue.push([adminUser], unverified);
 
          const res = await fetch(`${ctx.baseUrl}/staff/insurance/unverified`, {
-            headers: authHeader(staffUser),
+            headers: authHeader(adminUser),
          });
          expect(res.status).toBe(200);
          const body = await readJson(res);
          expect(body.unverifiedCoverages).toHaveLength(1);
       });
 
-      it('allows staff to verify insurance coverage and cascades to upcoming appointments', async () => {
+      it('allows admins to simulate insurance status and cascades to upcoming appointments', async () => {
          const updatedCoverage = {
             id: 5,
             patientId: 10,
@@ -787,7 +787,7 @@ describe('Staff Backend Routes & Controller', () => {
          };
 
          mockQueryQueue.push(
-            [staffUser],
+            [adminUser],
             [updatedCoverage], // update coverage
             [], // select upcoming appointments
          );
@@ -797,7 +797,7 @@ describe('Staff Backend Routes & Controller', () => {
             {
                method: 'PATCH',
                headers: {
-                  ...authHeader(staffUser),
+                  ...authHeader(adminUser),
                   'content-type': 'application/json',
                },
                body: JSON.stringify({ status: 'active' }),

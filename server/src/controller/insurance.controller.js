@@ -1,12 +1,12 @@
-import { and, desc, eq, gte } from 'drizzle-orm';
-import { appointments } from '../db/schema/appointments.js';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { insurancePlans } from '../db/schema/insurancePlans.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
 import { patients } from '../db/schema/patients.js';
 import { users } from '../db/schema/users.js';
 import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
-import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
+import { refreshPatientAppointmentInsurance } from '../services/insurance.service.js';
+import { verifyCoverage } from '../services/insurance-verification.service.js';
 
 export const getMyCoverage = async (req, res) => {
    if (!requirePatient(req, res)) return;
@@ -79,6 +79,66 @@ export const addMyCoverage = async (req, res) => {
    }
 };
 
+export const updateMyCoverage = async (req, res) => {
+   if (!requirePatient(req, res)) return;
+   if (Object.hasOwn(req.body ?? {}, 'status')) {
+      return res.status(400).json({
+         error: 'Coverage status can only be changed by a staff administrator.',
+      });
+   }
+   const coverageId = Number(req.params.coverageId);
+   const data = parseCoverage(req.body);
+   if (!Number.isInteger(coverageId) || coverageId < 1 || !data) {
+      return res
+         .status(400)
+         .json({ error: 'Valid insurance details are required.' });
+   }
+   try {
+      const coverage = await db.transaction(async (tx) => {
+         const insurancePlanId = await findOrCreateInsurancePlan(
+            tx,
+            data.insurerName,
+            data.planName,
+         );
+         const [updated] = await tx
+            .update(patientCoverage)
+            .set({
+               insurancePlanId,
+               policyNumber: data.policyNumber,
+               memberId: data.memberId,
+               coverageStart: data.coverageStart,
+               coverageEnd: data.coverageEnd,
+               status: 'unverified',
+               verifiedBy: null,
+               verifiedAt: null,
+               updatedAt: new Date(),
+            })
+            .where(
+               and(
+                  eq(patientCoverage.id, coverageId),
+                  eq(patientCoverage.patientId, req.user.patientId),
+               ),
+            )
+            .returning({
+               id: patientCoverage.id,
+               patientId: patientCoverage.patientId,
+               status: patientCoverage.status,
+            });
+         if (!updated) return null;
+         await refreshPatientAppointmentInsurance(tx, updated.patientId);
+         return updated;
+      });
+      return coverage
+         ? res.json({ coverage })
+         : res.status(404).json({ error: 'Coverage record not found.' });
+   } catch (error) {
+      console.error('Failed to update patient coverage:', error);
+      return res
+         .status(500)
+         .json({ error: 'Insurance details could not be updated.' });
+   }
+};
+
 export const getPatientCoverage = async (req, res) => {
    if (!requireStaff(req, res)) return;
    const patientId = Number(req.params.patientId);
@@ -129,9 +189,8 @@ export const getPatientCoverage = async (req, res) => {
 };
 
 export const verifyPatientCoverage = async (req, res) => {
-   if (!requireStaff(req, res)) return;
    const coverageId = Number(req.params.coverageId);
-   const { status } = req.body ?? {};
+   const status = req.body?.status;
    if (!Number.isInteger(coverageId) || coverageId < 1) {
       return res.status(400).json({ error: 'Invalid coverage ID' });
    }
@@ -141,51 +200,17 @@ export const verifyPatientCoverage = async (req, res) => {
          .json({ error: 'Status must be active or inactive' });
    }
    try {
-      const entry = await db.transaction(async (tx) => {
-         const [updated] = await tx
-            .update(patientCoverage)
-            .set({
-               status,
-               verifiedBy: req.user.id,
-               verifiedAt: new Date(),
-               updatedAt: new Date(),
-            })
-            .where(eq(patientCoverage.id, coverageId))
-            .returning({
-               id: patientCoverage.id,
-               patientId: patientCoverage.patientId,
-               verifiedAt: patientCoverage.verifiedAt,
-            });
-         if (!updated) return null;
-         const upcoming = await tx
-            .select({
-               id: appointments.id,
-               scheduledStart: appointments.scheduledStart,
-            })
-            .from(appointments)
-            .where(
-               and(
-                  eq(appointments.patientId, updated.patientId),
-                  eq(appointments.status, 'scheduled'),
-                  gte(appointments.scheduledStart, new Date()),
-               ),
-            );
-         for (const appointment of upcoming) {
-            const insuranceStatus = await getCoverageStatusForAppointment(
-               tx,
-               updated.patientId,
-               appointment.scheduledStart,
-            );
-            await tx
-               .update(appointments)
-               .set({ insuranceStatus, updatedAt: new Date() })
-               .where(eq(appointments.id, appointment.id));
-         }
-         return { id: updated.id, status, verifiedAt: updated.verifiedAt };
+      const entry = await verifyCoverage({
+         coverageId,
+         requestedStatus: status,
+         userId: req.user.id,
       });
       if (!entry)
          return res.status(404).json({ error: 'Coverage record not found' });
-      return res.json({ coverage: entry });
+      return res.json({
+         message: `Insurance coverage verified as ${entry.status} (simulated)`,
+         coverage: entry,
+      });
    } catch (error) {
       console.error('Failed to verify patient coverage:', error);
       return res

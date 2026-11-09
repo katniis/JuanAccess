@@ -41,6 +41,12 @@ export const users = pgTable(
 
       isActive: boolean('is_active').notNull().default(true),
 
+      emailNotificationsEnabled: boolean('email_notifications_enabled')
+         .notNull()
+         .default(true),
+
+      authVersion: integer('auth_version').notNull().default(0),
+
       createdAt: timestamp('created_at', {
          withTimezone: true,
       })

@@ -5,6 +5,13 @@ import {
    patientRegister,
    providerRegister,
    acceptStaffInvitation,
+   getSettings,
+   patchSettings,
+   changePassword,
+   forgotPassword,
+   resetPassword,
+   requestEmailChange,
+   confirmEmailChange,
 } from '../controller/auth.controller.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 
@@ -35,6 +42,14 @@ router.post(
 );
 
 router.post('/accept-invite', acceptStaffInvitation);
+
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+router.post('/email-change/confirm', confirmEmailChange);
+router.get('/settings', verifyToken, getSettings);
+router.patch('/settings', verifyToken, patchSettings);
+router.patch('/password', verifyToken, changePassword);
+router.post('/email-change/request', verifyToken, requestEmailChange);
 
 //Logout
 router.post('/logout', logout);

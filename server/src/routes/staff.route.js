@@ -114,7 +114,11 @@ router.delete(
 );
 
 // 6. Insurance Verification (New Patient Handling)
-router.get('/insurance/unverified', getUnverifiedCoverages);
-router.patch('/insurance/coverage/:id/verify', verifyCoverageStaff);
+router.get('/insurance/unverified', requireStaffAdmin, getUnverifiedCoverages);
+router.patch(
+   '/insurance/coverage/:id/verify',
+   requireStaffAdmin,
+   verifyCoverageStaff,
+);
 
 export default router;

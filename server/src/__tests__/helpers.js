@@ -4,8 +4,22 @@ import { jest } from '@jest/globals';
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.DATABASE_URL ??= 'postgres://localhost:5432/test_db';
 process.env.NODE_ENV = 'test';
+process.env.CLIENT_ORIGIN ??= 'http://localhost:5173';
 
 export const mockQueryQueue = [];
+export const mockSendEmail = jest.fn().mockResolvedValue({ id: 'email-test' });
+export const mockMutationLog = [];
+export const mockResendConfig = { configured: false };
+
+jest.unstable_mockModule(
+   '../services/email.service.js',
+   () => ({
+      sendEmail: mockSendEmail,
+      isResendConfigured: () => mockResendConfig.configured,
+      isEmailDeliveryEnabled: () => true,
+   }),
+   { virtual: true },
+);
 
 jest.unstable_mockModule('../db/index.js', () => {
    const take = () => mockQueryQueue.shift() ?? [];
@@ -18,10 +32,16 @@ jest.unstable_mockModule('../db/index.js', () => {
          orderBy: () => make(value),
          innerJoin: () => make(value),
          leftJoin: () => make(value),
-         values: () => make(value),
+         values: (values) => {
+            mockMutationLog.push({ values });
+            return make(value);
+         },
          returning: () => make(value),
          onConflictDoNothing: () => make(value),
-         set: () => make(value),
+         set: (set) => {
+            mockMutationLog.push({ set });
+            return make(value);
+         },
       };
 
       node.then = (onFulfilled, onRejected) =>
@@ -98,6 +118,9 @@ export const getCookie = (res, name) => {
 
 export const resetMocks = () => {
    mockQueryQueue.length = 0;
+   mockMutationLog.length = 0;
+   mockResendConfig.configured = false;
+   mockSendEmail.mockReset().mockResolvedValue({ id: 'email-test' });
 };
 
 export const postJson = (baseUrl, path, body, headers = {}) =>

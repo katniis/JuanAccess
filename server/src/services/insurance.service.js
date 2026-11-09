@@ -1,6 +1,7 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte } from 'drizzle-orm';
 import { insurancePlans } from '../db/schema/insurancePlans.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
+import { appointments } from '../db/schema/appointments.js';
 
 export async function findOrCreateInsurancePlan(tx, insurerName, planName) {
    await tx
@@ -47,6 +48,33 @@ export async function getCoverageStatusForAppointment(
    if (effective.some((coverage) => coverage.status === 'unverified'))
       return 'unverified';
    return coverages.length ? 'inactive' : 'unverified';
+}
+
+export async function refreshPatientAppointmentInsurance(tx, patientId) {
+   const upcoming = await tx
+      .select({
+         id: appointments.id,
+         scheduledStart: appointments.scheduledStart,
+      })
+      .from(appointments)
+      .where(
+         and(
+            eq(appointments.patientId, patientId),
+            eq(appointments.status, 'scheduled'),
+            gte(appointments.scheduledStart, new Date()),
+         ),
+      );
+   for (const appointment of upcoming) {
+      const insuranceStatus = await getCoverageStatusForAppointment(
+         tx,
+         patientId,
+         appointment.scheduledStart,
+      );
+      await tx
+         .update(appointments)
+         .set({ insuranceStatus, updatedAt: new Date() })
+         .where(eq(appointments.id, appointment.id));
+   }
 }
 
 function clinicDate(value) {

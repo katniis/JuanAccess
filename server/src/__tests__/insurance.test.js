@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import {
    mockQueryQueue,
+   mockMutationLog,
    postJson,
    readJson,
    resetMocks,
@@ -25,8 +26,14 @@ const staffUser = {
    providerId: 4,
    displayName: 'Test Staff',
 };
+const staffAdminUser = {
+   ...staffUser,
+   id: 5,
+   role: 'staff_admin',
+};
 const patientToken = jwt.sign({ id: patientUser.id }, secret);
 const staffToken = jwt.sign({ id: staffUser.id }, secret);
+const staffAdminToken = jwt.sign({ id: staffAdminUser.id }, secret);
 const authHeader = (token) => ({ cookie: `token=${token}` });
 
 describe('insurance routes', () => {
@@ -82,6 +89,64 @@ describe('insurance routes', () => {
       expect(await readJson(res)).toEqual({ coverage: entry });
    });
 
+   it('lets a patient correct their own coverage and resets verification', async () => {
+      const updated = { id: 5, patientId: 10, status: 'unverified' };
+      mockQueryQueue.push([patientUser], [], [{ id: 2 }], [updated], []);
+      const res = await fetch(`${ctx.baseUrl}/insurance/mine/5`, {
+         method: 'PATCH',
+         headers: {
+            ...authHeader(patientToken),
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({
+            insurer_name: 'Mock Health',
+            plan_name: 'Updated Plan',
+            policy_number: 'UPDATED-10',
+         }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await readJson(res)).toEqual({ coverage: updated });
+      expect(mockMutationLog).toContainEqual({
+         set: expect.objectContaining({
+            status: 'unverified',
+            verifiedBy: null,
+            verifiedAt: null,
+         }),
+      });
+   });
+
+   it('does not let a patient update another patient coverage record', async () => {
+      mockQueryQueue.push([patientUser], [], [{ id: 2 }], []);
+      const res = await fetch(`${ctx.baseUrl}/insurance/mine/99`, {
+         method: 'PATCH',
+         headers: {
+            ...authHeader(patientToken),
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({
+            insurer_name: 'Mock Health',
+            plan_name: 'Updated Plan',
+            policy_number: 'UPDATED-10',
+         }),
+      });
+      expect(res.status).toBe(404);
+   });
+
+   it('does not let a patient set coverage status from settings', async () => {
+      mockQueryQueue.push([patientUser]);
+      const res = await fetch(`${ctx.baseUrl}/insurance/mine/5`, {
+         method: 'PATCH',
+         headers: {
+            ...authHeader(patientToken),
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({ status: 'active' }),
+      });
+
+      expect(res.status).toBe(400);
+   });
+
    it('allows staff to read a patient coverage record', async () => {
       const patient = { id: 10, firstName: 'Test', lastName: 'Patient' };
       const entries = [{ id: 5, status: 'active' }];
@@ -93,17 +158,53 @@ describe('insurance routes', () => {
       expect(await readJson(res)).toEqual({ patient, coverages: entries });
    });
 
-   it('records staff verification and refreshes future appointments', async () => {
+   it('rejects insurance verification writes from regular staff on both routes', async () => {
+      mockQueryQueue.push([staffUser]);
+      const primary = await fetch(
+         `${ctx.baseUrl}/staff/insurance/coverage/5/verify`,
+         {
+            method: 'PATCH',
+            headers: {
+               ...authHeader(staffToken),
+               'content-type': 'application/json',
+            },
+            body: JSON.stringify({ status: 'active' }),
+         },
+      );
+      resetMocks();
+      mockQueryQueue.push([staffUser]);
+      const legacy = await fetch(`${ctx.baseUrl}/insurance/coverage/5/verify`, {
+         method: 'PATCH',
+         headers: {
+            ...authHeader(staffToken),
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({ status: 'active' }),
+      });
+
+      expect(primary.status).toBe(403);
+      expect(legacy.status).toBe(403);
+   });
+
+   it('keeps the verification queue read-only to staff members', async () => {
+      mockQueryQueue.push([staffUser]);
+      const res = await fetch(`${ctx.baseUrl}/staff/insurance/unverified`, {
+         headers: authHeader(staffToken),
+      });
+      expect(res.status).toBe(403);
+   });
+
+   it('records admin verification and refreshes future appointments', async () => {
       const updated = {
          id: 5,
          patientId: 10,
          verifiedAt: new Date().toISOString(),
       };
-      mockQueryQueue.push([staffUser], [updated], []);
+      mockQueryQueue.push([staffAdminUser], [updated], []);
       const res = await fetch(`${ctx.baseUrl}/insurance/coverage/5/verify`, {
          method: 'PATCH',
          headers: {
-            ...authHeader(staffToken),
+            ...authHeader(staffAdminToken),
             'content-type': 'application/json',
          },
          body: JSON.stringify({ status: 'active' }),

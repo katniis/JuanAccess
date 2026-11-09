@@ -1,4 +1,5 @@
 const shapes = {
+   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
    grid: (
       <>
          <rect x="3.5" y="3.5" width="7" height="7" rx="1.4" />

@@ -11,16 +11,16 @@ import { useAuth } from './contexts/useAuth.js';
 import AuthPage from './pages/AuthPage.jsx';
 import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import ErrorState from './components/ErrorState.jsx';
-import ComingSoon from './pages/ComingSoon.jsx';
 import PatientLayout from './layouts/PatientLayout.jsx';
 import BookAppointment from './pages/patient/BookAppointment.jsx';
 import PatientAppointments from './pages/patient/PatientAppointments.jsx';
 import PatientDashboard from './pages/patient/PatientDashboard.jsx';
 import PatientWaitlist from './pages/patient/PatientWaitlist.jsx';
 import UploadBill from './pages/patient/UploadBill.jsx';
+import PatientSettings from './pages/patient/PatientSettings.jsx';
 import StaffLayout from './layouts/StaffLayout.jsx';
 import StaffAppeals from './pages/staff/StaffAppeals.jsx';
-import StaffAccess from './pages/staff/StaffAccess.jsx';
+import StaffSettings from './pages/staff/StaffSettings.jsx';
 import StaffAttention from './pages/staff/StaffAttention.jsx';
 import StaffDashboard from './pages/staff/StaffDashboard.jsx';
 import StaffDisputeDetail from './pages/staff/StaffDisputeDetail.jsx';
@@ -29,6 +29,7 @@ import StaffPriorAuth from './pages/staff/StaffPriorAuth.jsx';
 import StaffPatientRecord from './pages/staff/StaffPatientRecord.jsx';
 import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
+import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
 import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
@@ -174,6 +175,18 @@ function App() {
                      }
                   />
                   <Route
+                     path="/forgot-password"
+                     element={<AccountRecoveryPage mode="forgot" />}
+                  />
+                  <Route
+                     path="/reset-password"
+                     element={<AccountRecoveryPage mode="reset" />}
+                  />
+                  <Route
+                     path="/confirm-email"
+                     element={<AccountRecoveryPage mode="confirm-email" />}
+                  />
+                  <Route
                      path="/staff"
                      element={
                         <ProtectedRoute allowedRoles={['staff', 'staff_admin']}>
@@ -191,7 +204,7 @@ function App() {
                         element={<StaffDisputeDetail />}
                      />
                      <Route path="attention" element={<StaffAttention />} />
-                     <Route path="settings" element={<StaffAccess />} />
+                     <Route path="settings" element={<StaffSettings />} />
                      <Route
                         path="records/:recordType/:recordId"
                         element={<StaffPatientRecord />}
@@ -211,10 +224,7 @@ function App() {
                         path="appointments"
                         element={<PatientAppointments />}
                      />
-                     <Route
-                        path="settings"
-                        element={<ComingSoon title="Settings" />}
-                     />
+                     <Route path="settings" element={<PatientSettings />} />
                      <Route path="bills" element={<UploadBill />} />
                   </Route>
                   <Route path="*" element={<NotFoundRoute />} />
