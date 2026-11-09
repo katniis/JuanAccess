@@ -1,4 +1,7 @@
-import { mapPatientAppointment } from './patientAppointments.js';
+import {
+   mapPatientAppointment,
+   partitionPatientAppointments,
+} from './patientAppointments.js';
 import { getMyBills } from './patientBills.js';
 import { patientRequest } from './patientApi.js';
 import { formatClinicDate, formatClinicDateTime } from './patientDates.js';
@@ -12,13 +15,10 @@ export async function getPatientDashboard() {
    ]);
    const now = Date.now();
    const appointments = appointmentRows.map(mapPatientAppointment);
-   const upcomingAppointments = appointments
-      .filter(
-         (appointment) =>
-            appointment.status === 'scheduled' &&
-            new Date(appointment.scheduledStart).getTime() >= now,
-      )
-      .sort((a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart));
+   const { upcoming: upcomingAppointments } = partitionPatientAppointments(
+      appointments,
+      now,
+   );
    const activeWaitlist = waitlistRows.filter((entry) =>
       ['waiting', 'offered'].includes(entry.status),
    );
@@ -28,12 +28,14 @@ export async function getPatientDashboard() {
    const upcomingAppointment = upcomingAppointments[0] || null;
    const completedSince = new Date();
    completedSince.setFullYear(completedSince.getFullYear() - 1);
-   const completedVisits = appointments.filter(
-      (appointment) =>
+   const completedVisits = appointments.filter((appointment) => {
+      const start = new Date(appointment.scheduledStart).getTime();
+      return (
          appointment.status === 'completed' &&
-         new Date(appointment.scheduledStart).getTime() >=
-            completedSince.getTime(),
-   ).length;
+         start >= completedSince.getTime() &&
+         start < now
+      );
+   }).length;
    const billsToReview = bills.filter((bill) =>
       ['processing', 'disputed'].includes(bill.status),
    );

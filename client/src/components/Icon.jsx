@@ -58,6 +58,13 @@ const shapes = {
          <path d="M12 11v5M12 8h.01" />
       </>
    ),
+   'circle-help': (
+      <>
+         <circle cx="12" cy="12" r="9" />
+         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+         <path d="M12 17h.01" />
+      </>
+   ),
    alert: (
       <>
          <path d="m12 3 9 17H3l9-17Z" />
@@ -114,6 +121,13 @@ const shapes = {
          <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3" />
       </>
    ),
+   settings: (
+      <>
+         <circle cx="12" cy="12" r="3" />
+         <path d="M10 2h4l.6 3.1a7 7 0 0 1 1.8 1l2.9-1.2 2 3.5-2.3 2a7 7 0 0 1 0 2l2.3 2-2 3.5-2.9-1.2a7 7 0 0 1-1.8 1L14 22h-4l-.6-3.1a7 7 0 0 1-1.8-1l-2.9 1.2-2-3.5 2.3-2a7 7 0 0 1 0-2l-2.3-2 2-3.5 2.9 1.2a7 7 0 0 1 1.8-1L10 2Z" />
+      </>
+   ),
+   'chevron-left': <path d="m15 5-7 7 7 7" />,
    'chevron-right': <path d="m9 5 7 7-7 7" />,
    'chevron-down': <path d="m7 10 5 5 5-5" />,
    signout: (

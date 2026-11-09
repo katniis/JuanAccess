@@ -4,11 +4,7 @@ import StatusPill from './StatusPill.jsx';
 
 export function WaitlistRow({ entry }) {
    return (
-      <Link
-         className={
-            'waitlist-row' + (entry.status === 'offered' ? ' highlighted' : '')
-         }
-         to="/patient/waitlist">
+      <Link className="waitlist-row" to="/patient/waitlist">
          <span className="waitlist-copy">
             <span className="waitlist-title">
                <strong>{entry.providerName}</strong>
@@ -38,7 +34,7 @@ export function StatCard({ stat }) {
             <p>{stat.detail}</p>
          </div>
          <Link to={stat.path} className="stat-link">
-            {stat.linkLabel} <span aria-hidden="true">→</span>
+            {stat.linkLabel} <Icon name="chevron-right" />
          </Link>
       </section>
    );

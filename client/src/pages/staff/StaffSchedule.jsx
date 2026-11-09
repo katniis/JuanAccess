@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
-import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    getAppointmentPreVisitData,
@@ -79,7 +78,6 @@ function AppointmentDrawer({
    const [detail, setDetail] = useState(null);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState(false);
-   const { notify } = usePortalFeedback();
 
    useEffect(() => {
       let current = true;
@@ -90,10 +88,6 @@ function AppointmentDrawer({
          .catch(() => {
             if (current) {
                setError(true);
-               notify({
-                  type: 'error',
-                  message: 'Pre-visit details could not load.',
-               });
             }
          })
          .finally(() => {
@@ -102,7 +96,7 @@ function AppointmentDrawer({
       return () => {
          current = false;
       };
-   }, [appointment.id, notify]);
+   }, [appointment.id]);
 
    useGSAP(
       () => {
@@ -205,7 +199,7 @@ function AppointmentDrawer({
                   {loading ? (
                      <p role="status">Preparing the patient chart summary…</p>
                   ) : error ? (
-                     <p>
+                     <p role="alert">
                         Pre-visit summary is unavailable. You can close this
                         panel and try again later.
                      </p>
@@ -283,6 +277,7 @@ function StaffSchedule() {
    );
    const [providers, setProviders] = useState(null);
    const [providerId, setProviderId] = useState(requestedProviderId);
+   const [providerSearch, setProviderSearch] = useState('');
    const [selectedDate, setSelectedDate] = useState(todayInManila);
    const [view, setView] = useState('day');
    const [providerLoadError, setProviderLoadError] = useState(false);
@@ -369,6 +364,11 @@ function StaffSchedule() {
    const selectedProvider = providers?.find(
       (provider) => provider.id === providerId,
    );
+   const visibleProviders = (providers || []).filter((provider) =>
+      `Dr. ${provider.firstName} ${provider.lastName}`
+         .toLocaleLowerCase()
+         .includes(providerSearch.trim().toLocaleLowerCase()),
+   );
    const weekDays = useMemo(
       () =>
          Array.from({ length: 7 }, (_, index) => {
@@ -419,29 +419,49 @@ function StaffSchedule() {
             <p>View and coordinate appointments across the clinic.</p>
          </header>
          <div className="staff-schedule-controls">
-            <div
-               className="schedule-provider-tabs"
-               role="group"
-               aria-label="Select provider">
-               {providers.map((provider) => (
-                  <button
-                     className={
-                        selectedProvider.id === provider.id ? 'selected' : ''
-                     }
-                     type="button"
-                     key={provider.id}
-                     aria-pressed={selectedProvider.id === provider.id}
-                     onClick={() => {
-                        setProviderId(provider.id);
-                        setSearchParams(
-                           { provider: String(provider.id) },
-                           { replace: true },
-                        );
-                        setSelectedAppointment(null);
-                     }}>
-                     Dr. {provider.firstName} {provider.lastName}
-                  </button>
-               ))}
+            <div className="staff-provider-picker">
+               <label className="staff-provider-search">
+                  Search providers
+                  <input
+                     type="search"
+                     value={providerSearch}
+                     onChange={(event) => setProviderSearch(event.target.value)}
+                     placeholder="Name"
+                     autoComplete="off"
+                  />
+               </label>
+               {visibleProviders.length ? (
+                  <div
+                     className="schedule-provider-tabs"
+                     role="group"
+                     aria-label="Select provider">
+                     {visibleProviders.map((provider) => (
+                        <button
+                           className={
+                              selectedProvider.id === provider.id
+                                 ? 'selected'
+                                 : ''
+                           }
+                           type="button"
+                           key={provider.id}
+                           aria-pressed={selectedProvider.id === provider.id}
+                           onClick={() => {
+                              setProviderId(provider.id);
+                              setSearchParams(
+                                 { provider: String(provider.id) },
+                                 { replace: true },
+                              );
+                              setSelectedAppointment(null);
+                           }}>
+                           Dr. {provider.firstName} {provider.lastName}
+                        </button>
+                     ))}
+                  </div>
+               ) : (
+                  <p className="staff-provider-empty">
+                     No providers match “{providerSearch.trim()}”.
+                  </p>
+               )}
             </div>
             <label className="staff-date-field">
                Date

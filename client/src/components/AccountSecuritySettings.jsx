@@ -5,7 +5,10 @@ import {
    requestEmailChange,
    saveAccountSettings,
 } from '../services/auth.js';
-import { EMAIL_FEATURES_ENABLED } from '../utils/emailFeatures.js';
+import {
+   EMAIL_FEATURES_ENABLED,
+   EMAIL_UNAVAILABLE_MESSAGE,
+} from '../utils/emailFeatures.js';
 
 function AccountSecuritySettings({ settings, onSettingsChange }) {
    const { refreshUser } = useAuth();
@@ -92,30 +95,23 @@ function AccountSecuritySettings({ settings, onSettingsChange }) {
             <header className="staff-card-heading">
                <div>
                   <h2>Email notifications</h2>
-                  <p>
+                  <p id="email-notifications-disabled">
                      {EMAIL_FEATURES_ENABLED
                         ? 'In-app notices stay on when email is turned off.'
-                        : 'Email delivery is paused. In-app notices continue to work.'}
+                        : `${EMAIL_UNAVAILABLE_MESSAGE} In-app notices continue to work.`}
                   </p>
                </div>
             </header>
-            {!EMAIL_FEATURES_ENABLED && (
-               <p
-                  className="email-maintenance-note"
-                  title="Under maintenance"
-                  role="note">
-                  Email features are under maintenance.
-               </p>
-            )}
-            <label
-               className="settings-checkbox"
-               title={
-                  !EMAIL_FEATURES_ENABLED ? 'Under maintenance' : undefined
-               }>
+            <label className="settings-checkbox">
                <input
                   type="checkbox"
                   checked={settings.emailNotificationsEnabled}
                   disabled={!EMAIL_FEATURES_ENABLED || Boolean(pending)}
+                  aria-describedby={
+                     !EMAIL_FEATURES_ENABLED
+                        ? 'email-notifications-disabled'
+                        : undefined
+                  }
                   onChange={toggleEmailNotices}
                />
                <span>Send account notifications by email</span>
@@ -164,11 +160,9 @@ function AccountSecuritySettings({ settings, onSettingsChange }) {
                   </button>
                </form>
             ) : (
-               <p
-                  className="email-maintenance-note"
-                  title="Under maintenance"
-                  role="note">
-                  Login email changes are under maintenance.
+               <p className="email-maintenance-note" role="note">
+                  {EMAIL_UNAVAILABLE_MESSAGE} Login email changes remain
+                  disabled.
                </p>
             )}
          </section>

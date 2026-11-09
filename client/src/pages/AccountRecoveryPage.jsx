@@ -5,7 +5,10 @@ import {
    forgotPassword,
    resetPassword,
 } from '../services/auth.js';
-import { EMAIL_FEATURES_ENABLED } from '../utils/emailFeatures.js';
+import {
+   EMAIL_FEATURES_ENABLED,
+   EMAIL_UNAVAILABLE_MESSAGE,
+} from '../utils/emailFeatures.js';
 
 function AccountRecoveryPage({ mode }) {
    const [searchParams] = useSearchParams();
@@ -57,7 +60,9 @@ function AccountRecoveryPage({ mode }) {
         ? 'Choose a new password'
         : 'Confirm your email';
    const subtitle = isForgot
-      ? 'Enter your login email and we’ll send a secure reset link if it matches an account.'
+      ? EMAIL_FEATURES_ENABLED
+         ? 'Enter your login email and we’ll send a secure reset link if it matches an account.'
+         : ''
       : isReset
         ? 'Reset links expire after 30 minutes and can only be used once.'
         : 'Confirm the new login email address for your JuanAccess account.';
@@ -77,7 +82,7 @@ function AccountRecoveryPage({ mode }) {
             <section className="auth-card" aria-labelledby="recovery-title">
                <header className="auth-heading">
                   <h1 id="recovery-title">{title}</h1>
-                  <p>{subtitle}</p>
+                  {subtitle && <p>{subtitle}</p>}
                </header>
                {EMAIL_FEATURES_ENABLED ? (
                   <form className="auth-form" onSubmit={submit}>
@@ -148,12 +153,8 @@ function AccountRecoveryPage({ mode }) {
                      </button>
                   </form>
                ) : (
-                  <p
-                     className="email-maintenance-note"
-                     title="Under maintenance"
-                     role="status">
-                     Email features are under maintenance. Please try again
-                     later.
+                  <p className="email-maintenance-note" role="status">
+                     {EMAIL_UNAVAILABLE_MESSAGE}
                   </p>
                )}
                <p className="auth-switch">

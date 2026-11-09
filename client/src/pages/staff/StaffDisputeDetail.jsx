@@ -53,7 +53,7 @@ function StaffDisputeDetail() {
       return (
          <div className="staff-dispute-detail-page">
             <Link className="staff-dispute-back" to="/staff/disputes">
-               ← Back to Disputes
+               <Icon name="chevron-left" /> Back to Disputes
             </Link>
             <ErrorState
                compact
@@ -71,7 +71,7 @@ function StaffDisputeDetail() {
    return (
       <div className="staff-dispute-detail-page" ref={pageRef}>
          <Link className="staff-dispute-back" to="/staff/disputes">
-            ← Back to Disputes
+            <Icon name="chevron-left" /> Back to Disputes
          </Link>
 
          <header className="staff-dispute-detail-heading">

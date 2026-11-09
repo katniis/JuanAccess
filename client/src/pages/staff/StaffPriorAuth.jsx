@@ -4,15 +4,14 @@ import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import PortalActionProgress from '../../components/PortalActionProgress.jsx';
-import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    createAppealFromPriorAuth,
+   groupStaffPriorAuthRecords,
    getStaffPriorAuthDetail,
    getStaffPriorAuthQueue,
    savePriorAuthDraft,
    setPriorAuthDecision,
-   stages,
    submitPriorAuth,
 } from '../../services/staffPriorAuth.js';
 import { gsap, useGSAP } from '../../utils/portalGsap.js';
@@ -25,6 +24,7 @@ const statusLabels = {
    approved: 'Approved',
    denied: 'Denied',
    appealed: 'Appealed',
+   not_required: 'Not required',
 };
 const fullName = (first, last) =>
    [first, last].filter(Boolean).join(' ') || 'Patient record';
@@ -40,15 +40,16 @@ const dateOfBirth = (value) =>
 
 function StaffPriorAuth() {
    const { role = 'staff' } = useOutletContext();
-   const { notify } = usePortalFeedback();
    const [records, setRecords] = useState(null);
    const [hasError, setHasError] = useState(false);
-   const [activeStage, setActiveStage] = useState('needs_draft');
+   const [activeGroup, setActiveGroup] = useState('needs-action');
+   const [stageFilter, setStageFilter] = useState('all');
    const [selectedRecord, setSelectedRecord] = useState(null);
    const [loadingDetail, setLoadingDetail] = useState(false);
    const [justification, setJustification] = useState('');
    const [pending, setPending] = useState('');
    const [inlineError, setInlineError] = useState('');
+   const [inlineStatus, setInlineStatus] = useState('');
    const [progress, setProgress] = useState(null);
    const closeButtonRef = useRef(null);
    const triggerRef = useRef(null);
@@ -128,6 +129,7 @@ function StaffPriorAuth() {
       setSelectedRecord(record);
       setJustification(record.justification || '');
       setInlineError('');
+      setInlineStatus('');
       setLoadingDetail(true);
       try {
          const detail = await getStaffPriorAuthDetail(record.id);
@@ -147,13 +149,13 @@ function StaffPriorAuth() {
    const runAction = async (key, action, successMessage) => {
       setPending(key);
       setInlineError('');
+      setInlineStatus('');
       try {
          await action();
          await refresh();
-         notify({ type: 'success', message: successMessage });
+         setInlineStatus(successMessage);
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
       } finally {
          setPending('');
          setProgress(null);
@@ -170,6 +172,7 @@ function StaffPriorAuth() {
       });
       setPending('generate');
       setInlineError('');
+      setInlineStatus('');
       try {
          const saved = await savePriorAuthDraft(selectedRecord.id, '');
          setProgress((current) => ({
@@ -180,13 +183,14 @@ function StaffPriorAuth() {
             detail: 'Draft saved to the authorization queue.',
          }));
          await refresh();
-         notify({ type: 'success', message: 'Authorization draft prepared.' });
+         setInlineStatus(
+            'Authorization draft prepared. Review it before submission.',
+         );
          setJustification(
             saved?.justificationText || selectedRecord.justification || '',
          );
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
          setProgress(null);
       } finally {
          setPending('');
@@ -196,6 +200,7 @@ function StaffPriorAuth() {
    const createAppeal = async () => {
       setPending('appeal');
       setInlineError('');
+      setInlineStatus('');
       setProgress({
          title: 'Preparing appeal draft',
          detail:
@@ -218,14 +223,10 @@ function StaffPriorAuth() {
             detail: 'The appeal draft is ready for staff review.',
          }));
          await refresh();
-         notify({
-            type: 'success',
-            message: 'Appeal draft added to the Appeals Queue.',
-         });
+         setInlineStatus('Appeal draft added to the Appeals Queue.');
          setSelectedRecord((current) => ({ ...current, status: 'appealed' }));
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
          setProgress(null);
       } finally {
          setPending('');
@@ -235,9 +236,11 @@ function StaffPriorAuth() {
    const submitAuthorization = async () => {
       setPending('submit');
       setInlineError('');
+      setInlineStatus('');
       setProgress({
          title: 'Submitting authorization',
-         detail: 'Sending the saved request to the configured plan workflow.',
+         detail:
+            'Sending the saved request through the configured plan workflow.',
          steps: [
             'Validate saved draft',
             'Submit request',
@@ -256,14 +259,9 @@ function StaffPriorAuth() {
             detail: 'The plan workflow response is recorded.',
          }));
          await refresh();
-         notify({
-            type: 'success',
-            message:
-               'Authorization submitted and the plan response was recorded.',
-         });
+         setInlineStatus('Plan workflow response recorded.');
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
          setProgress(null);
       } finally {
          setPending('');
@@ -285,8 +283,14 @@ function StaffPriorAuth() {
          />
       );
 
-   const visibleRecords = records.filter(
-      (record) => record.status === activeStage,
+   const groups = groupStaffPriorAuthRecords(records);
+   const selectedGroup =
+      groups.find((group) => group.id === activeGroup) || groups[0];
+   const visibleRecords = selectedGroup.records.filter(
+      (record) => stageFilter === 'all' || record.status === stageFilter,
+   );
+   const nextGroup = groups.find(
+      (group) => group.id !== activeGroup && group.records.length > 0,
    );
    const isAdmin = role === 'staff_admin';
    const currentStatus = selectedRecord?.status;
@@ -305,55 +309,55 @@ function StaffPriorAuth() {
       <div className="prior-auth-page" ref={pageRef}>
          <header className="staff-schedule-heading">
             <h1>Prior Authorization Queue</h1>
-            <p>Track and manage authorization requests across all stages</p>
+            <p>
+               Find requests that need staff action, await a plan outcome, or
+               are resolved.
+            </p>
          </header>
-         <div
-            className="prior-auth-tabs"
-            role="group"
-            aria-label="Filter prior authorizations by stage">
-            {stages.map((stage) => {
-               const count = records.filter(
-                  (record) => record.status === stage,
-               ).length;
-               return (
+         <div className="prior-auth-queue-controls">
+            <div
+               className="prior-auth-tabs"
+               role="group"
+               aria-label="Filter prior authorizations by action">
+               {groups.map((group) => (
                   <button
-                     className={activeStage === stage ? 'selected' : ''}
+                     className={activeGroup === group.id ? 'selected' : ''}
                      type="button"
-                     key={stage}
-                     aria-pressed={activeStage === stage}
+                     key={group.id}
+                     aria-pressed={activeGroup === group.id}
                      onClick={() => {
-                        setActiveStage(stage);
+                        setActiveGroup(group.id);
+                        setStageFilter('all');
                         setSelectedRecord(null);
                      }}>
-                     {statusLabels[stage]}
-                     <span>{count}</span>
+                     {group.label}
+                     <span>{group.records.length}</span>
                   </button>
-               );
-            })}
-            {['appealed'].map((stage) => (
-               <button
-                  className={activeStage === stage ? 'selected' : ''}
-                  type="button"
-                  key={stage}
-                  aria-pressed={activeStage === stage}
-                  onClick={() => {
-                     setActiveStage(stage);
-                     setSelectedRecord(null);
-                  }}>
-                  {statusLabels[stage]}
-                  <span>
-                     {
-                        records.filter((record) => record.status === stage)
-                           .length
-                     }
-                  </span>
-               </button>
-            ))}
+               ))}
+            </div>
+            {selectedGroup.stages.length > 1 && (
+               <label className="prior-auth-stage-filter">
+                  Stage
+                  <select
+                     value={stageFilter}
+                     onChange={(event) => {
+                        setStageFilter(event.target.value);
+                        setSelectedRecord(null);
+                     }}>
+                     <option value="all">All stages</option>
+                     {selectedGroup.stages.map((stage) => (
+                        <option key={stage} value={stage}>
+                           {statusLabels[stage]}
+                        </option>
+                     ))}
+                  </select>
+               </label>
+            )}
          </div>
          {visibleRecords.length ? (
             <section
                className="prior-auth-grid"
-               aria-label={`${statusLabels[activeStage]} requests`}>
+               aria-label={`${selectedGroup.label} prior authorizations`}>
                {visibleRecords.map((record) => (
                   <button
                      className="prior-auth-card"
@@ -384,7 +388,21 @@ function StaffPriorAuth() {
                ))}
             </section>
          ) : (
-            <p className="prior-auth-empty">No requests in this stage.</p>
+            <div className="prior-auth-empty">
+               <p>No requests in {selectedGroup.label.toLowerCase()}.</p>
+               {nextGroup && (
+                  <button
+                     className="button button-outline button-small"
+                     type="button"
+                     onClick={() => {
+                        setActiveGroup(nextGroup.id);
+                        setStageFilter('all');
+                     }}>
+                     View {nextGroup.label.toLowerCase()} (
+                     {nextGroup.records.length})
+                  </button>
+               )}
+            </div>
          )}
          {selectedRecord && (
             <div
@@ -466,6 +484,12 @@ function StaffPriorAuth() {
                                        currentStatus}
                                  </span>
                               </header>
+                              <p className="prior-auth-process-note">
+                                 Generated text is a draft and must be checked
+                                 against the chart by staff. This environment
+                                 records outcomes through a local plan
+                                 simulation.
+                              </p>
                               <textarea
                                  id="prior-auth-justification"
                                  value={justification}
@@ -536,9 +560,25 @@ function StaffPriorAuth() {
                         </>
                      )}
                      {progress && <PortalActionProgress {...progress} />}
+                     {inlineStatus && (
+                        <p
+                           className="prior-auth-inline-status"
+                           role="status"
+                           aria-live="polite">
+                           {inlineStatus}
+                        </p>
+                     )}
                      {inlineError && (
                         <p className="prior-auth-inline-error" role="alert">
                            {inlineError}
+                        </p>
+                     )}
+                     {!isAdmin && (canSubmit || canDecide) && (
+                        <p
+                           className="appeal-admin-note"
+                           id="prior-auth-admin-restriction">
+                           Submission and plan decisions are restricted to staff
+                           admins. Staff can still prepare and review drafts.
                         </p>
                      )}
                      <footer className="prior-auth-detail-footer staff-action-row">
@@ -547,15 +587,15 @@ function StaffPriorAuth() {
                               className="button button-primary"
                               type="button"
                               disabled={Boolean(pending) || !isAdmin}
-                              title={
+                              aria-describedby={
                                  !isAdmin
-                                    ? 'Only staff admins can submit a prior authorization.'
+                                    ? 'prior-auth-admin-restriction'
                                     : undefined
                               }
                               onClick={() => void submitAuthorization()}>
                               {pending === 'submit'
                                  ? 'Submitting…'
-                                 : 'Submit to insurer'}
+                                 : 'Submit to plan workflow'}
                            </button>
                         )}
                         {canDecide && (
@@ -564,9 +604,9 @@ function StaffPriorAuth() {
                                  className="button button-outline"
                                  type="button"
                                  disabled={Boolean(pending) || !isAdmin}
-                                 title={
+                                 aria-describedby={
                                     !isAdmin
-                                       ? 'Only staff admins can record the insurer decision.'
+                                       ? 'prior-auth-admin-restriction'
                                        : undefined
                                  }
                                  onClick={() =>
@@ -585,12 +625,12 @@ function StaffPriorAuth() {
                                     : 'Mark approved'}
                               </button>
                               <button
-                                 className="button button-outline"
+                                 className="button button-destructive"
                                  type="button"
                                  disabled={Boolean(pending) || !isAdmin}
-                                 title={
+                                 aria-describedby={
                                     !isAdmin
-                                       ? 'Only staff admins can record the insurer decision.'
+                                       ? 'prior-auth-admin-restriction'
                                        : undefined
                                  }
                                  onClick={() =>
@@ -629,12 +669,6 @@ function StaffPriorAuth() {
                            Close
                         </button>
                      </footer>
-                     {!isAdmin && (canSubmit || canDecide) && (
-                        <p className="appeal-admin-note">
-                           Submission and insurer decisions are restricted to
-                           staff admins. Your draft changes can still be saved.
-                        </p>
-                     )}
                   </div>
                </aside>
             </div>

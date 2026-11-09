@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
    Link,
    useLocation,
@@ -6,7 +6,10 @@ import {
    useSearchParams,
 } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth.js';
-import { EMAIL_FEATURES_ENABLED } from '../utils/emailFeatures.js';
+import {
+   EMAIL_FEATURES_ENABLED,
+   EMAIL_UNAVAILABLE_MESSAGE,
+} from '../utils/emailFeatures.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {
@@ -64,6 +67,7 @@ function AuthPage({ mode = 'signin' }) {
    const [rememberMe, setRememberMe] = useState(false);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const emailUnavailableDialogRef = useRef(null);
    const invitationToken = searchParams.get('token') || '';
    const isSignup = mode === 'signup';
    const isInvitation = mode === 'invite';
@@ -547,13 +551,16 @@ function AuthPage({ mode = 'signin' }) {
                         {EMAIL_FEATURES_ENABLED ? (
                            <Link to="/forgot-password">Forgot password?</Link>
                         ) : (
-                           <span
+                           <button
                               className="auth-maintenance-link"
-                              title="Under maintenance"
-                              role="note"
-                              aria-label="Forgot password? Under maintenance">
+                              type="button"
+                              aria-haspopup="dialog"
+                              aria-controls="auth-password-reset-unavailable"
+                              onClick={() =>
+                                 emailUnavailableDialogRef.current?.showModal()
+                              }>
                               Forgot password?
-                           </span>
+                           </button>
                         )}
                      </div>
                   )}
@@ -632,6 +639,39 @@ function AuthPage({ mode = 'signin' }) {
                </span>
             </aside>
          </div>
+
+         {!EMAIL_FEATURES_ENABLED && !isSignup && !isInvitation && (
+            <dialog
+               ref={emailUnavailableDialogRef}
+               className="auth-email-unavailable-dialog"
+               id="auth-password-reset-unavailable"
+               aria-labelledby="auth-password-reset-unavailable-title"
+               aria-describedby="auth-password-reset-unavailable-description"
+               onClick={(event) => {
+                  if (event.target === event.currentTarget)
+                     event.currentTarget.close();
+               }}>
+               <div className="auth-email-unavailable-dialog-content">
+                  <span
+                     className="auth-email-unavailable-icon"
+                     aria-hidden="true">
+                     !
+                  </span>
+                  <h2 id="auth-password-reset-unavailable-title">
+                     Password reset unavailable
+                  </h2>
+                  <p id="auth-password-reset-unavailable-description">
+                     {EMAIL_UNAVAILABLE_MESSAGE}
+                  </p>
+                  <button
+                     className="button button-primary"
+                     type="button"
+                     onClick={() => emailUnavailableDialogRef.current?.close()}>
+                     Got it
+                  </button>
+               </div>
+            </dialog>
+         )}
 
          <footer className="auth-footer">
             © {new Date().getFullYear()} JuanAccess

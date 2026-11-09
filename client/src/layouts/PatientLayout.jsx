@@ -256,17 +256,22 @@ function PatientLayout() {
                      ))}
                   </nav>
                   <div className="sidebar-account" ref={accountAreaRef}>
+                     <NavLink
+                        className={({ isActive }) =>
+                           'nav-link sidebar-settings' +
+                           (isActive ? ' active' : '')
+                        }
+                        to="/patient/settings"
+                        onClick={() => setMobileNavOpen(false)}>
+                        <Icon name="settings" />
+                        <span>Settings</span>
+                     </NavLink>
                      <div
                         className="account-menu"
                         id="patient-account-menu"
                         role="group"
                         aria-label="Patient account options"
                         hidden={!accountMenuOpen}>
-                        <Link
-                           to="/patient/settings"
-                           onClick={() => setMobileNavOpen(false)}>
-                           Settings
-                        </Link>
                         <button
                            className="account-menu-signout"
                            type="button"

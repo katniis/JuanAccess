@@ -349,7 +349,7 @@ function PatientWaitlist() {
                                     : 'Confirm'}
                               </button>
                               <button
-                                 className="button button-outline"
+                                 className="button button-destructive"
                                  type="button"
                                  disabled={
                                     busyOfferAction?.id === entry.id ||
@@ -366,7 +366,7 @@ function PatientWaitlist() {
                            </>
                         ) : (
                            <button
-                              className="remove-waitlist"
+                              className="button button-small button-destructive remove-waitlist"
                               type="button"
                               disabled={busyId === entry.id}
                               onClick={() => void removeEntry(entry)}>

@@ -114,23 +114,9 @@ function UploadBill() {
                );
             });
          } else if (dialog.open) {
-            media.add('(prefers-reduced-motion: reduce)', () => {
-               dialog.close();
-               window.requestAnimationFrame(() => setDisplayBillToDelete(null));
-            });
-            media.add('(prefers-reduced-motion: no-preference)', () => {
-               gsap.to(content, {
-                  autoAlpha: 0,
-                  y: 8,
-                  scale: 0.98,
-                  duration: 0.16,
-                  ease: 'power1.in',
-                  onComplete: () => {
-                     dialog.close();
-                     setDisplayBillToDelete(null);
-                  },
-               });
-            });
+            dialog.close();
+            setDisplayBillToDelete(null);
+            setIsDeletingBill(false);
          }
          return () => media.revert();
       },
@@ -402,8 +388,6 @@ function UploadBill() {
                requestError.message ||
                'The bill could not be deleted. Your billing history is unchanged.',
          });
-      } finally {
-         setIsDeletingBill(false);
       }
    };
 
@@ -1065,7 +1049,7 @@ function BillHistoryRow({ bill, isSelected, disabled, onReview, onDelete }) {
             </button>
             {!bill.disputeLetter?.submittedAt && (
                <button
-                  className="button button-light button-small bill-delete-trigger"
+                  className="button button-small button-destructive"
                   type="button"
                   disabled={disabled}
                   onClick={onDelete}

@@ -1,13 +1,5 @@
 import { staffRequest } from './staffApi.js';
-
-const stages = [
-   'needs_draft',
-   'drafted',
-   'submitted',
-   'manual_review',
-   'approved',
-   'denied',
-];
+export { groupStaffPriorAuthRecords, stages } from './staffPriorAuthGroups.js';
 
 function mapRecord(record) {
    return {
@@ -69,5 +61,3 @@ export async function createAppealFromPriorAuth(id) {
       body: { prior_authorization_id: Number(id) },
    });
 }
-
-export { stages };

@@ -4,7 +4,6 @@ import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import PortalActionProgress from '../../components/PortalActionProgress.jsx';
-import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
    getStaffAppealDetail,
@@ -35,7 +34,6 @@ const dateLabel = (value) =>
 
 function StaffAppeals() {
    const { role = 'staff' } = useOutletContext();
-   const { notify } = usePortalFeedback();
    const [appeals, setAppeals] = useState(null);
    const [hasError, setHasError] = useState(false);
    const [activeStage, setActiveStage] = useState('drafted');
@@ -45,6 +43,7 @@ function StaffAppeals() {
    const [chartJustification, setChartJustification] = useState('');
    const [pending, setPending] = useState('');
    const [inlineError, setInlineError] = useState('');
+   const [inlineStatus, setInlineStatus] = useState('');
    const [progress, setProgress] = useState(null);
    const closeButtonRef = useRef(null);
    const triggerRef = useRef(null);
@@ -138,13 +137,13 @@ function StaffAppeals() {
    const runAction = async (key, action, successMessage) => {
       setPending(key);
       setInlineError('');
+      setInlineStatus('');
       try {
          await action();
          await refresh();
-         notify({ type: 'success', message: successMessage });
+         setInlineStatus(successMessage);
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
       } finally {
          setPending('');
          setProgress(null);
@@ -154,6 +153,7 @@ function StaffAppeals() {
    const submitAppeal = async () => {
       setPending('submit');
       setInlineError('');
+      setInlineStatus('');
       setProgress({
          title: 'Submitting appeal',
          detail: 'Recording the plan response and updating the appeal record.',
@@ -176,13 +176,9 @@ function StaffAppeals() {
                'The plan workflow returned a result and the queue is updated.',
          }));
          await refresh();
-         notify({
-            type: 'success',
-            message: 'Appeal submitted and the plan result was recorded.',
-         });
+         setInlineStatus('Plan workflow response recorded for this appeal.');
       } catch (error) {
          setInlineError(error.message);
-         notify({ type: 'error', message: error.message });
          setProgress(null);
       } finally {
          setPending('');
@@ -438,9 +434,26 @@ function StaffAppeals() {
                         </>
                      )}
                      {progress && <PortalActionProgress {...progress} />}
+                     {inlineStatus && (
+                        <p
+                           className="prior-auth-inline-status"
+                           role="status"
+                           aria-live="polite">
+                           {inlineStatus}
+                        </p>
+                     )}
                      {inlineError && (
                         <p className="prior-auth-inline-error" role="alert">
                            {inlineError}
+                        </p>
+                     )}
+                     {!isAdmin && (canSubmit || canDecide) && (
+                        <p
+                           className="appeal-admin-note"
+                           id="appeal-admin-restriction">
+                           Plan submissions and decisions are restricted to
+                           staff admins. Staff can still prepare and save draft
+                           changes.
                         </p>
                      )}
                      <footer className="appeal-detail-footer">
@@ -449,9 +462,9 @@ function StaffAppeals() {
                               className="button button-primary appeal-submit"
                               type="button"
                               disabled={Boolean(pending) || !isAdmin}
-                              title={
+                              aria-describedby={
                                  !isAdmin
-                                    ? 'Only staff admins can submit appeals.'
+                                    ? 'appeal-admin-restriction'
                                     : undefined
                               }
                               onClick={() => void submitAppeal()}>
@@ -466,9 +479,9 @@ function StaffAppeals() {
                                  className="button button-outline"
                                  type="button"
                                  disabled={Boolean(pending) || !isAdmin}
-                                 title={
+                                 aria-describedby={
                                     !isAdmin
-                                       ? 'Only staff admins can record appeal decisions.'
+                                       ? 'appeal-admin-restriction'
                                        : undefined
                                  }
                                  onClick={() =>
@@ -487,12 +500,12 @@ function StaffAppeals() {
                                     : 'Mark approved'}
                               </button>
                               <button
-                                 className="button button-outline"
+                                 className="button button-destructive"
                                  type="button"
                                  disabled={Boolean(pending) || !isAdmin}
-                                 title={
+                                 aria-describedby={
                                     !isAdmin
-                                       ? 'Only staff admins can record appeal decisions.'
+                                       ? 'appeal-admin-restriction'
                                        : undefined
                                  }
                                  onClick={() =>
@@ -528,13 +541,6 @@ function StaffAppeals() {
                            Close
                         </button>
                      </footer>
-                     {!isAdmin && (canSubmit || canDecide) && (
-                        <p className="appeal-admin-note">
-                           Only staff admins can submit appeals or record
-                           insurer decisions. Staff can still prepare and save
-                           draft changes.
-                        </p>
-                     )}
                   </div>
                </aside>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
+import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import { getStaffPatientRecord } from '../../services/staffDashboard.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
@@ -61,7 +62,7 @@ function StaffPatientRecord() {
       return (
          <div className="staff-record-page">
             <Link className="staff-dispute-back" to="/staff">
-               ← Back to dashboard
+               <Icon name="chevron-left" /> Back to dashboard
             </Link>
             <ErrorState
                compact
@@ -80,7 +81,7 @@ function StaffPatientRecord() {
    return (
       <div className="staff-record-page" ref={pageRef}>
          <Link className="staff-dispute-back" to="/staff">
-            ← Back to dashboard
+            <Icon name="chevron-left" /> Back to dashboard
          </Link>
          <header className="staff-schedule-heading">
             <h1>{fullName(patient)}</h1>

@@ -37,6 +37,7 @@ const timePeriods = [
 
 function BookAppointment() {
    const [visitTypes, setVisitTypes] = useState([]);
+   const [visitTypeSearch, setVisitTypeSearch] = useState('');
    const [selectedVisitType, setSelectedVisitType] = useState(null);
    const [selectedDateKeys, setSelectedDateKeys] = useState([]);
    const [timePeriod, setTimePeriod] = useState(null);
@@ -57,6 +58,11 @@ function BookAppointment() {
    const [bookingStage, setBookingStage] = useState(0);
    const [authDraftStatus, setAuthDraftStatus] = useState(null);
    const pageRef = useRef(null);
+   const filteredVisitTypes = visitTypes.filter((visitType) =>
+      visitType.name
+         .toLocaleLowerCase()
+         .includes(visitTypeSearch.trim().toLocaleLowerCase()),
+   );
    usePortalPageReveal(pageRef, booked || !loading, booked);
 
    useEffect(() => {
@@ -306,23 +312,48 @@ function BookAppointment() {
                      label="visit reasons"
                   />
                ) : (
-                  <fieldset className="reason-list">
-                     <legend className="sr-only">Visit reason</legend>
-                     {visitTypes.map((visitType) => (
-                        <label
-                           className={`reason-option${selectedVisitType?.id === visitType.id ? ' selected' : ''}`}
-                           key={visitType.id}>
-                           <input
-                              type="radio"
-                              name="visit-reason"
-                              value={visitType.id}
-                              checked={selectedVisitType?.id === visitType.id}
-                              onChange={() => setSelectedVisitType(visitType)}
-                           />
-                           <span>{visitType.name}</span>
-                        </label>
-                     ))}
-                  </fieldset>
+                  <>
+                     <label className="reason-search">
+                        Find a visit reason
+                        <input
+                           type="search"
+                           value={visitTypeSearch}
+                           onChange={(event) => {
+                              setVisitTypeSearch(event.target.value);
+                              setSelectedVisitType(null);
+                           }}
+                           placeholder="Search visit types"
+                           autoComplete="off"
+                        />
+                     </label>
+                     {filteredVisitTypes.length ? (
+                        <fieldset className="reason-list">
+                           <legend className="sr-only">Visit reason</legend>
+                           {filteredVisitTypes.map((visitType) => (
+                              <label
+                                 className={`reason-option${selectedVisitType?.id === visitType.id ? ' selected' : ''}`}
+                                 key={visitType.id}>
+                                 <input
+                                    type="radio"
+                                    name="visit-reason"
+                                    value={visitType.id}
+                                    checked={
+                                       selectedVisitType?.id === visitType.id
+                                    }
+                                    onChange={() =>
+                                       setSelectedVisitType(visitType)
+                                    }
+                                 />
+                                 <span>{visitType.name}</span>
+                              </label>
+                           ))}
+                        </fieldset>
+                     ) : (
+                        <p className="reason-empty">
+                           No visit types match “{visitTypeSearch.trim()}”.
+                        </p>
+                     )}
+                  </>
                )}
                <div className="booking-actions right reason-step-actions">
                   <button
@@ -330,7 +361,7 @@ function BookAppointment() {
                      type="button"
                      disabled={!selectedVisitType || loading}
                      onClick={() => setStep(1)}>
-                     Continue <span aria-hidden="true">→</span>
+                     Continue <Icon name="chevron-right" />
                   </button>
                </div>
             </section>
@@ -399,14 +430,20 @@ function BookAppointment() {
                      className="button button-quiet"
                      type="button"
                      onClick={() => setStep(0)}>
-                     ← Back
+                     <Icon name="chevron-left" /> Back
                   </button>
                   <button
                      className="button button-primary"
                      type="button"
                      disabled={!selectedDateKeys.length || isSearching}
                      onClick={findSlots}>
-                     {isSearching ? 'Finding slots…' : 'Find Slots →'}
+                     {isSearching ? (
+                        'Finding slots…'
+                     ) : (
+                        <>
+                           Find Slots <Icon name="chevron-right" />
+                        </>
+                     )}
                   </button>
                </div>
             </section>
@@ -516,7 +553,7 @@ function BookAppointment() {
                      type="button"
                      disabled={isBooking || bookingConfirmed}
                      onClick={() => setStep(1)}>
-                     ← Back
+                     <Icon name="chevron-left" /> Back
                   </button>
                </div>
             </div>
@@ -579,13 +616,13 @@ function MiniCalendar({
                   type="button"
                   aria-label="Previous month"
                   onClick={() => onChangeMonth(new Date(year, month - 1, 1))}>
-                  ‹
+                  <Icon name="chevron-left" />
                </button>
                <button
                   type="button"
                   aria-label="Next month"
                   onClick={() => onChangeMonth(new Date(year, month + 1, 1))}>
-                  ›
+                  <Icon name="chevron-right" />
                </button>
             </div>
          </div>

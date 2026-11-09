@@ -4,6 +4,7 @@ import AppointmentCancelDialog from '../../components/AppointmentCancelDialog.js
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
+import StatusGuide from '../../components/StatusGuide.jsx';
 import StatusPill from '../../components/StatusPill.jsx';
 import {
    StatCard,
@@ -226,7 +227,7 @@ function PatientDashboard() {
                            : 'Confirm Slot'}
                      </button>
                      <button
-                        className="button button-light"
+                        className="button button-destructive"
                         type="button"
                         disabled={Boolean(busyAction)}
                         onClick={() => void respondToOffer('decline')}>
@@ -244,7 +245,7 @@ function PatientDashboard() {
                <div className="panel-heading">
                   <h2 id="appointment-heading">Upcoming appointment</h2>
                   <Link className="text-link" to="/patient/appointments">
-                     View all <span aria-hidden="true">→</span>
+                     View all <Icon name="chevron-right" />
                   </Link>
                </div>
                {upcomingAppointment ? (
@@ -270,37 +271,69 @@ function PatientDashboard() {
                               Add to calendar
                            </button>
                            <div className="coverage-row">
-                              <span>Insurance</span>
-                              <StatusPill
-                                 status={upcomingAppointment.insuranceStatus}>
-                                 {upcomingAppointment.insuranceLabel}
-                              </StatusPill>
-                              <span className="prior-auth-label">
+                              <span className="coverage-label-with-guide">
+                                 Insurance
+                              </span>
+                              <span className="coverage-status-with-guide">
+                                 <StatusPill
+                                    status={
+                                       upcomingAppointment.insuranceStatus
+                                    }>
+                                    {upcomingAppointment.insuranceLabel}
+                                 </StatusPill>
+                                 <StatusGuide
+                                    type="insurance"
+                                    statusLabel={
+                                       upcomingAppointment.insuranceLabel
+                                    }
+                                    description={
+                                       upcomingAppointment.insuranceDescription
+                                    }
+                                 />
+                              </span>
+                              <span className="coverage-label-with-guide prior-auth-label">
                                  Prior auth
                               </span>
-                              <StatusPill
-                                 status={
-                                    upcomingAppointment.priorAuthorizationStatus
-                                 }>
-                                 {upcomingAppointment.priorAuthorizationLabel}
-                              </StatusPill>
+                              <span className="coverage-status-with-guide">
+                                 <StatusPill
+                                    status={
+                                       upcomingAppointment.priorAuthorizationStatus
+                                    }>
+                                    {
+                                       upcomingAppointment.priorAuthorizationLabel
+                                    }
+                                 </StatusPill>
+                                 <StatusGuide
+                                    type="priorAuth"
+                                    align="end"
+                                    statusLabel={
+                                       upcomingAppointment.priorAuthorizationLabel
+                                    }
+                                    description={
+                                       upcomingAppointment.priorAuthorizationDescription
+                                    }
+                                 />
+                              </span>
                            </div>
                         </div>
                      </div>
                      <div className="appointment-footer">
                         <Link
-                           className="button button-light"
+                           className="button button-primary"
                            to="/patient/book">
                            Reschedule
                         </Link>
                         <button
-                           className="button button-quiet"
+                           className="button button-destructive"
                            type="button"
                            disabled={Boolean(busyAction)}
                            onClick={() =>
                               setAppointmentToCancel(upcomingAppointment)
                            }>
-                           {busyAction === 'cancel' ? 'Cancelling…' : 'Cancel'}
+                           <Icon name="calendar" />
+                           {busyAction === 'cancel'
+                              ? 'Cancelling…'
+                              : 'Cancel Appointment'}
                         </button>
                      </div>
                   </>
@@ -322,7 +355,7 @@ function PatientDashboard() {
                   <Link
                      className="button button-outline button-small"
                      to="/patient/waitlist">
-                     Manage <span aria-hidden="true">→</span>
+                     Manage <Icon name="chevron-right" />
                   </Link>
                </div>
                {waitlistEntries.length ? (

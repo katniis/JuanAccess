@@ -34,12 +34,31 @@ import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
    return (
-      <main className="session-status-screen" role="status" aria-busy="true">
-         <section className="session-restore-card">
+      <main
+         className="session-status-screen is-restoring"
+         role="status"
+         aria-busy="true">
+         <section
+            className="session-restore"
+            aria-labelledby="session-restore-title">
             <img src="/juanaccess-logo.svg" alt="JuanAccess" />
-            <span className="session-restore-spinner" aria-hidden="true" />
-            <h1>Restoring your session</h1>
-            <p>Checking your secure connection to JuanAccess…</p>
+            <div className="session-restore-content">
+               <h1 id="session-restore-title">Getting your portal ready</h1>
+               <p>
+                  We’re securely checking your saved session. The clinic service
+                  may take a moment to wake up before your portal opens.
+               </p>
+               <div
+                  className="session-restore-progress"
+                  role="progressbar"
+                  aria-label="Checking your secure session">
+                  <span aria-hidden="true" />
+               </div>
+               <p className="session-restore-note">
+                  Keep this page open. We’ll continue automatically when the
+                  check is complete.
+               </p>
+            </div>
          </section>
       </main>
    );

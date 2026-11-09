@@ -219,17 +219,22 @@ function StaffLayout() {
                      ))}
                   </nav>
                   <div className="sidebar-account" ref={accountAreaRef}>
+                     <NavLink
+                        className={({ isActive }) =>
+                           'nav-link sidebar-settings' +
+                           (isActive ? ' active' : '')
+                        }
+                        to="/staff/settings"
+                        onClick={() => setMobileNavOpen(false)}>
+                        <Icon name="settings" />
+                        <span>Settings</span>
+                     </NavLink>
                      <div
                         className="account-menu"
                         id="staff-account-menu"
                         role="group"
                         aria-label="Staff account options"
                         hidden={!accountMenuOpen}>
-                        <Link
-                           to="/staff/settings"
-                           onClick={() => setMobileNavOpen(false)}>
-                           Settings
-                        </Link>
                         <button
                            className="account-menu-signout"
                            type="button"

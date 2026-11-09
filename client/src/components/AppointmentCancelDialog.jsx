@@ -37,23 +37,8 @@ function AppointmentCancelDialog({
                );
             });
          } else if (dialog.open) {
-            media.add('(prefers-reduced-motion: reduce)', () => {
-               dialog.close();
-               window.requestAnimationFrame(() => setDisplayAppointment(null));
-            });
-            media.add('(prefers-reduced-motion: no-preference)', () => {
-               gsap.to(content, {
-                  autoAlpha: 0,
-                  y: 8,
-                  scale: 0.98,
-                  duration: 0.16,
-                  ease: 'power1.in',
-                  onComplete: () => {
-                     dialog.close();
-                     setDisplayAppointment(null);
-                  },
-               });
-            });
+            dialog.close();
+            setDisplayAppointment(null);
          }
          return () => media.revert();
       },

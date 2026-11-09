@@ -38,7 +38,7 @@ function eventFor(appointment, times) {
    const patient = [appointment.patientFirstName, appointment.patientLastName]
       .filter(Boolean)
       .join(' ');
-   const palette = ['aqua', 'violet', 'mint', 'amber'];
+   const palette = ['aqua', 'blue', 'mint', 'amber'];
    return {
       id: appointment.id,
       appointmentId: appointment.id,
