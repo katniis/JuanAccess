@@ -1,0 +1,16 @@
+{
+   "rewrites": [
+      {
+         "source": "/api/health",
+         "destination": "https://juanaccess.onrender.com/api/health"
+      },
+      {
+         "source": "/api/:path*",
+         "destination": "https://juanaccess.onrender.com/:path*"
+      },
+      {
+         "source": "/(.*)",
+         "destination": "/index.html"
+      }
+   ]
+}
