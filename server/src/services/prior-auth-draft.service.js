@@ -161,6 +161,10 @@ function clinicDate(value) {
 }
 
 export async function processPendingPriorAuthDrafts(limit = 10) {
+   if (process.env.PRIOR_AUTH_DRAFT_WORKER_ENABLED === 'false') {
+      return { processed: 0, pending: 0, skipped: true };
+   }
+
    const pending = await db
       .select({ id: priorAuthorizations.id })
       .from(priorAuthorizations)

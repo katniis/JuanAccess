@@ -1,6 +1,6 @@
 const apiBaseUrl = (
    import.meta.env.VITE_API_URL ||
-   (import.meta.env.DEV ? 'http://localhost:3000' : window.location.origin)
+   (import.meta.env.DEV ? 'http://localhost:3000' : '/api')
 ).replace(/\/$/, '');
 
 async function authRequest(path, body, method = body ? 'POST' : 'GET') {
