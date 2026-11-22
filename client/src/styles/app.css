@@ -8349,3 +8349,56 @@ dialog::-webkit-scrollbar,
 .doctor-profile-dialog {
    width: min(560px, calc(100vw - 32px));
 }
+
+/* Six-box authenticator code input (OtpInput) */
+.otp-input {
+   display: grid;
+   grid-template-columns: repeat(6, minmax(0, 52px));
+   justify-content: start;
+   gap: 8px;
+}
+.auth-field .otp-input .otp-input__cell {
+   width: 100%;
+   height: 56px;
+   padding: 0;
+   border: 1px solid #ccd9e6;
+   border-radius: 10px;
+   background: #fff;
+   color: #173652;
+   font: inherit;
+   font-size: 1.5rem;
+   font-weight: 600;
+   font-variant-numeric: tabular-nums;
+   text-align: center;
+   caret-color: #0783a3;
+}
+.auth-field .otp-input .otp-input__cell:focus {
+   border-color: #0783a3;
+   outline: 3px solid #0d94b322;
+}
+.auth-field .otp-input--invalid .otp-input__cell {
+   border-width: 2px;
+   border-color: #b42318;
+}
+.auth-field .otp-input .otp-input__cell:disabled {
+   background: #f3f6f9;
+   color: #71869b;
+   cursor: not-allowed;
+}
+.otp-input-status {
+   margin: 0;
+   color: #71869b;
+   font-size: var(--type-small);
+}
+.otp-input-status:empty {
+   margin-top: -7px;
+}
+@media (max-width: 380px) {
+   .otp-input {
+      gap: 6px;
+   }
+   .auth-field .otp-input .otp-input__cell {
+      height: 48px;
+      font-size: 1.25rem;
+   }
+}
