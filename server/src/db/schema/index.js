@@ -6,6 +6,7 @@ export { providers } from './providers.js';
 export { rooms } from './rooms.js';
 export { users } from './users.js';
 export { accountActionTokens } from './accountActionTokens.js';
+export { recoveryCodes } from './recoveryCodes.js';
 export { userInvitations } from './userInvitations.js';
 export { visitTypes } from './visitTypes.js';
 export { appointments } from './appointments.js';

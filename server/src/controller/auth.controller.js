@@ -19,6 +19,17 @@ import {
 } from '../services/email.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { insertNotification } from '../services/notification.service.js';
+import { recoveryCodes } from '../db/schema/recoveryCodes.js';
+import {
+   decryptSecret,
+   encryptSecret,
+   hashRecoveryCode,
+   isValidTotp,
+   newRecoveryCodes,
+   newTotpSecret,
+   totpUri,
+} from '../services/second-factor.service.js';
+import QRCode from 'qrcode';
 
 const cookieOptions = {
    httpOnly: true,
@@ -421,70 +432,299 @@ export const login = async (req, res) => {
          return res.status(401).json({ message: 'Invalid credentials.' });
       }
 
-      const audit = (action, newValue) =>
-         void recordAudit({
-            entityType: 'user',
-            entityId: user.id,
-            action,
-            changedBy: user.id,
-            newValue: { ip: req.ip, ...newValue },
-         });
+      const audit = auditFor(req, user);
 
-      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      if (isLocked(user)) {
          audit('login_locked');
-         return res.status(423).json({
-            message: 'Account is temporarily locked. Try again later.',
-         });
+         return res.status(423).json({ message: lockedMessage });
       }
 
       if (!(await bcrypt.compare(password, user.passwordHash))) {
-         const attempts = (user.failedLoginAttempts ?? 0) + 1;
-         const lock = attempts >= maxFailedLogins;
-         const lockedUntil = lock ? new Date(Date.now() + lockoutMs) : null;
-         await db
-            .update(users)
-            .set({ failedLoginAttempts: lock ? 0 : attempts, lockedUntil })
-            .where(eq(users.id, user.id));
-         audit(lock ? 'login_lockout' : 'login_failed', { attempts });
+         await recordFailedAttempt(user, audit, 'login_failed');
          return res.status(401).json({ message: 'Invalid credentials.' });
       }
 
-      if (user.failedLoginAttempts || user.lockedUntil) {
-         await db
-            .update(users)
-            .set({ failedLoginAttempts: 0, lockedUntil: null })
-            .where(eq(users.id, user.id));
-      }
-
-      const isStaff = isStaffRole(user.role);
-      if (isStaff) {
-         await insertNotification(db, {
-            userId: user.id,
-            type: 'new_login',
-            message: `New sign-in to your staff account at ${new Date().toISOString()}.`,
-            emailEnabled: false,
+      // Staff get a short-lived pending token; the session waits for the Second Factor.
+      if (isStaffRole(user.role)) {
+         const enrolled = Boolean(
+            user.totpEnabledAt && user.totpSecretEncrypted,
+         );
+         const purpose = enrolled ? 'second_factor' : 'second_factor_setup';
+         res.cookie(
+            secondFactorCookie,
+            jwt.sign(
+               { id: user.id, authVersion: user.authVersion ?? 0, purpose },
+               process.env.JWT_SECRET,
+               { expiresIn: '10m' },
+            ),
+            { ...cookieOptions, maxAge: pendingTokenMs },
+         );
+         audit('login_password_verified', { purpose });
+         return res.json({
+            secondFactor: enrolled ? 'required' : 'setup_required',
          });
       }
-      audit('login_success');
 
-      const shouldRemember = rememberMe === true;
-      res.cookie(
-         'token',
-         generateToken(
-            user.id,
-            user.authVersion ?? 0,
-            shouldRemember,
-            isStaff ? '12h' : '30d',
-         ),
-         isStaff
-            ? { ...cookieOptions, maxAge: staffSessionMs }
-            : shouldRemember
-              ? persistentCookieOptions
-              : cookieOptions,
-      );
+      await startSession(res, user, audit, { rememberMe: rememberMe === true });
       return res.json({ user: safeUser(user) });
    } catch (error) {
       console.error('Login failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+const pendingTokenMs = 10 * 60 * 1000;
+const secondFactorCookie = 'second_factor';
+const lockedMessage = 'Account is temporarily locked. Try again later.';
+
+const isLocked = (user) =>
+   Boolean(user.lockedUntil && new Date(user.lockedUntil) > new Date());
+
+const auditFor = (req, user) => (action, newValue) =>
+   void recordAudit({
+      entityType: 'user',
+      entityId: user.id,
+      action,
+      changedBy: user.id,
+      newValue: { ip: req.ip, ...newValue },
+   });
+
+// Wrong passwords and wrong Second Factor codes share one per-account lockout counter.
+async function recordFailedAttempt(user, audit, failAction, detail = {}) {
+   const attempts = (user.failedLoginAttempts ?? 0) + 1;
+   const lock = attempts >= maxFailedLogins;
+   const lockedUntil = lock ? new Date(Date.now() + lockoutMs) : null;
+   await db
+      .update(users)
+      .set({ failedLoginAttempts: lock ? 0 : attempts, lockedUntil })
+      .where(eq(users.id, user.id));
+   audit(lock ? 'login_lockout' : failAction, { attempts, ...detail });
+}
+
+async function startSession(res, user, audit, { rememberMe = false, method }) {
+   if (user.failedLoginAttempts || user.lockedUntil) {
+      await db
+         .update(users)
+         .set({ failedLoginAttempts: 0, lockedUntil: null })
+         .where(eq(users.id, user.id));
+   }
+
+   const isStaff = isStaffRole(user.role);
+   if (isStaff) {
+      await insertNotification(db, {
+         userId: user.id,
+         type: 'new_login',
+         message: `New sign-in to your staff account at ${new Date().toISOString()}.`,
+         emailEnabled: false,
+      });
+   }
+   audit('login_success', method ? { method } : undefined);
+
+   res.cookie(
+      'token',
+      generateToken(
+         user.id,
+         user.authVersion ?? 0,
+         rememberMe,
+         isStaff ? '12h' : '30d',
+      ),
+      isStaff
+         ? { ...cookieOptions, maxAge: staffSessionMs }
+         : rememberMe
+           ? persistentCookieOptions
+           : cookieOptions,
+   );
+}
+
+const clearSecondFactorCookie = (res) =>
+   res.clearCookie(secondFactorCookie, cookieOptions);
+
+async function loadPendingUser(req, res, purpose) {
+   if (!allowActionRequest(req, 'second-factor', loginRequestsPerWindow)) {
+      res.status(429).json({
+         message: 'Too many attempts. Try again later.',
+      });
+      return null;
+   }
+   let claims = null;
+   try {
+      claims = jwt.verify(
+         req.cookies?.[secondFactorCookie],
+         process.env.JWT_SECRET,
+      );
+   } catch {
+      // Missing, expired or tampered pending tokens all mean "sign in again".
+   }
+   const signInAgain = () =>
+      res.status(401).json({ message: 'Sign in again to continue.' });
+   if (claims?.purpose !== purpose || typeof claims.id !== 'number') {
+      signInAgain();
+      return null;
+   }
+   const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, claims.id), eq(users.isActive, true)))
+      .limit(1);
+   if (
+      !user ||
+      !isStaffRole(user.role) ||
+      (user.authVersion ?? 0) !== (claims.authVersion ?? 0)
+   ) {
+      signInAgain();
+      return null;
+   }
+   const audit = auditFor(req, user);
+   if (isLocked(user)) {
+      audit('login_locked');
+      res.status(423).json({ message: lockedMessage });
+      return null;
+   }
+   return { user, audit };
+}
+
+export const verifySecondFactor = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor');
+      if (!pending) return;
+      const { user, audit } = pending;
+      if (!user.totpEnabledAt || !user.totpSecretEncrypted) {
+         return res.status(401).json({ message: 'Sign in again to continue.' });
+      }
+
+      const { code, recoveryCode } = req.body ?? {};
+      const method =
+         typeof recoveryCode === 'string' && recoveryCode.trim()
+            ? 'recovery_code'
+            : 'totp';
+      let valid;
+      if (method === 'recovery_code') {
+         const [used] = await db
+            .update(recoveryCodes)
+            .set({ usedAt: new Date() })
+            .where(
+               and(
+                  eq(recoveryCodes.userId, user.id),
+                  eq(recoveryCodes.codeHash, hashRecoveryCode(recoveryCode)),
+                  isNull(recoveryCodes.usedAt),
+               ),
+            )
+            .returning({ id: recoveryCodes.id });
+         valid = Boolean(used);
+      } else {
+         valid = isValidTotp(decryptSecret(user.totpSecretEncrypted), code);
+      }
+
+      if (!valid) {
+         await recordFailedAttempt(user, audit, 'second_factor_failed', {
+            method,
+         });
+         return res.status(401).json({ message: 'Invalid code.' });
+      }
+
+      clearSecondFactorCookie(res);
+      await startSession(res, user, audit, { method });
+      return res.json({ user: safeUser(user) });
+   } catch (error) {
+      console.error('Second Factor verification failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const startSecondFactorSetup = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor_setup');
+      if (!pending) return;
+      const { user } = pending;
+      if (user.totpEnabledAt) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      const secret = newTotpSecret();
+      await db
+         .update(users)
+         .set({
+            totpSecretEncrypted: encryptSecret(secret),
+            totpEnabledAt: null,
+         })
+         .where(eq(users.id, user.id));
+      const otpauthUrl = totpUri(secret, user.email);
+      return res.json({
+         otpauthUrl,
+         qrCodeDataUrl: await QRCode.toDataURL(otpauthUrl),
+         secret,
+      });
+   } catch (error) {
+      console.error('Second Factor setup failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const confirmSecondFactorSetup = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor_setup');
+      if (!pending) return;
+      const { user, audit } = pending;
+      if (user.totpEnabledAt) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      if (!user.totpSecretEncrypted) {
+         return res
+            .status(400)
+            .json({ message: 'Start Second Factor setup first.' });
+      }
+      if (
+         !isValidTotp(decryptSecret(user.totpSecretEncrypted), req.body?.code)
+      ) {
+         await recordFailedAttempt(user, audit, 'second_factor_failed', {
+            method: 'setup',
+         });
+         return res.status(401).json({ message: 'Invalid code.' });
+      }
+
+      const codes = newRecoveryCodes();
+      const activated = await db.transaction(async (tx) => {
+         const [row] = await tx
+            .update(users)
+            .set({
+               totpEnabledAt: new Date(),
+               failedLoginAttempts: 0,
+               lockedUntil: null,
+            })
+            .where(and(eq(users.id, user.id), isNull(users.totpEnabledAt)))
+            .returning({ id: users.id });
+         if (!row) return false;
+         await tx
+            .delete(recoveryCodes)
+            .where(eq(recoveryCodes.userId, user.id));
+         await tx.insert(recoveryCodes).values(
+            codes.map((code) => ({
+               userId: user.id,
+               codeHash: hashRecoveryCode(code),
+            })),
+         );
+         return true;
+      });
+      if (!activated) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      audit('second_factor_enrolled');
+
+      clearSecondFactorCookie(res);
+      await startSession(
+         res,
+         { ...user, failedLoginAttempts: 0, lockedUntil: null },
+         audit,
+         { method: 'totp' },
+      );
+      return res.json({ user: safeUser(user), recoveryCodes: codes });
+   } catch (error) {
+      console.error('Second Factor setup confirmation failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };

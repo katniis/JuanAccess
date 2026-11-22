@@ -44,6 +44,18 @@ export function signIn(credentials) {
    return authRequest('login', credentials);
 }
 
+export function verifySecondFactor(details) {
+   return authRequest('second-factor/verify', details);
+}
+
+export function startSecondFactorSetup() {
+   return authRequest('second-factor/setup', {});
+}
+
+export function confirmSecondFactorSetup(code) {
+   return authRequest('second-factor/setup/confirm', { code });
+}
+
 export function registerPatient(details) {
    return authRequest('register', details);
 }
