@@ -122,8 +122,8 @@ function StaffPractitioners() {
             <div>
                <h2>Practitioners</h2>
                <p>
-                  Manage Practitioners and the Doctor Profiles shown in the
-                  Doctor Directory.
+                  Manage Practitioners and the Doctor Profiles patients see when
+                  booking.
                </p>
             </div>
             <button
