@@ -34,6 +34,7 @@ import {
    recordProcedure,
 } from '../services/billing.service.js';
 import { manilaDateBounds } from '../utils/timezone.js';
+import { parseCancellationReason } from '../utils/cancellationReasons.js';
 import { generateGeminiDraft } from '../services/gemini.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { notifyPatient } from '../services/notification.service.js';
@@ -249,8 +250,20 @@ export const cancelAppointmentStaff = async (req, res) => {
       return res.status(400).json({ error: 'Invalid appointment ID' });
    }
 
+   const { error, reason, reasonText } = parseCancellationReason(
+      req.user.role,
+      req.body,
+   );
+   if (error) {
+      return res.status(400).json({ error });
+   }
+
    try {
-      const result = await staffCancelAppointment(appointmentId, req.user.id);
+      const result = await staffCancelAppointment(appointmentId, {
+         userId: req.user.id,
+         reason,
+         reasonText,
+      });
       if (!result) {
          return res
             .status(404)

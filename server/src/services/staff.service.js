@@ -16,6 +16,7 @@ import { db } from '../db/index.js';
 import {
    appeals,
    appointments,
+   auditLog,
    chartNotes,
    conditions,
    equipment,
@@ -624,7 +625,10 @@ export async function getResourceUtilization(date) {
    };
 }
 
-export async function staffCancelAppointment(appointmentId) {
+export async function staffCancelAppointment(
+   appointmentId,
+   { userId, reason, reasonText },
+) {
    return await db.transaction(
       async (tx) => {
          const [appointment] = await tx
@@ -640,9 +644,17 @@ export async function staffCancelAppointment(appointmentId) {
 
          if (!appointment) return null;
 
+         const now = new Date();
          const [updated] = await tx
             .update(appointments)
-            .set({ status: 'cancelled', updatedAt: new Date() })
+            .set({
+               status: 'cancelled',
+               cancellationReason: reason,
+               cancellationReasonText: reasonText,
+               cancelledByUserId: userId,
+               cancelledAt: now,
+               updatedAt: now,
+            })
             .where(
                and(
                   eq(appointments.id, appointmentId),
@@ -652,6 +664,16 @@ export async function staffCancelAppointment(appointmentId) {
             .returning();
 
          if (!updated) return null;
+
+         // Written in the transaction so the audit entry commits with the cancellation.
+         await tx.insert(auditLog).values({
+            entityType: 'appointment',
+            entityId: appointmentId,
+            action: 'staff_cancel',
+            changedBy: userId,
+            oldValue: { status: appointment.status },
+            newValue: { status: 'cancelled', reason, reasonText },
+         });
 
          await notifyPatient(
             tx,

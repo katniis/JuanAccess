@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import AppointmentCancelDialog from '../../components/AppointmentCancelDialog.jsx';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
+   STAFF_CANCELLATION_REASONS,
+   cancelStaffAppointment,
    getAppointmentPreVisitData,
    getProviderSchedule,
    getStaffProviders,
@@ -72,6 +76,7 @@ function AppointmentDrawer({
    provider,
    selectedDate,
    onClose,
+   onCancelAppointment,
    closeButtonRef,
 }) {
    const drawerRef = useRef(null);
@@ -194,6 +199,14 @@ function AppointmentDrawer({
                      </dd>
                   </div>
                </dl>
+               {appointment.status === 'scheduled' && (
+                  <button
+                     className="button button-danger"
+                     type="button"
+                     onClick={onCancelAppointment}>
+                     Cancel appointment
+                  </button>
+               )}
                <section className="staff-previsit-summary" aria-live="polite">
                   <h3>Pre-visit summary</h3>
                   {loading ? (
@@ -287,6 +300,9 @@ function StaffSchedule() {
    const appointments = hasScheduleResult ? scheduleResult.appointments : null;
    const scheduleError = hasScheduleResult && scheduleResult.error;
    const [selectedAppointment, setSelectedAppointment] = useState(null);
+   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+   const [cancelling, setCancelling] = useState(false);
+   const { notify } = usePortalFeedback();
    const pageRef = useRef(null);
    const closeButtonRef = useRef(null);
    const appointmentButtonRef = useRef(null);
@@ -360,6 +376,32 @@ function StaffSchedule() {
          appointmentButtonRef.current?.focus();
       };
    }, [selectedAppointment]);
+
+   const confirmCancellation = async (cancellation) => {
+      const id = appointmentToCancel?.id;
+      if (!id) return;
+      setCancelling(true);
+      try {
+         await cancelStaffAppointment(id, cancellation);
+         setScheduleResult((result) => ({
+            ...result,
+            appointments: result.appointments.map((appointment) =>
+               appointment.id === id
+                  ? { ...appointment, status: 'cancelled' }
+                  : appointment,
+            ),
+         }));
+         notify({ type: 'success', message: 'Appointment cancelled.' });
+      } catch (error) {
+         notify({
+            type: 'error',
+            message: error.message || 'We could not cancel this appointment.',
+         });
+      } finally {
+         setCancelling(false);
+         setAppointmentToCancel(null);
+      }
+   };
 
    const selectedProvider = providers?.find(
       (provider) => provider.id === providerId,
@@ -589,9 +631,29 @@ function StaffSchedule() {
                provider={selectedProvider}
                selectedDate={selectedDate}
                onClose={() => setSelectedAppointment(null)}
+               onCancelAppointment={() => {
+                  setAppointmentToCancel({
+                     id: selectedAppointment.id,
+                     providerName: `Dr. ${selectedProvider.firstName} ${selectedProvider.lastName}`,
+                     visitType: selectedAppointment.visitTypeName,
+                     dateLabel: dateLabel(selectedDate, {
+                        month: 'short',
+                        day: 'numeric',
+                     }),
+                     timeLabel: timeLabel(selectedAppointment.scheduledStart),
+                  });
+                  setSelectedAppointment(null);
+               }}
                closeButtonRef={closeButtonRef}
             />
          )}
+         <AppointmentCancelDialog
+            appointment={appointmentToCancel}
+            busy={cancelling}
+            reasons={STAFF_CANCELLATION_REASONS}
+            onCancel={() => setAppointmentToCancel(null)}
+            onConfirm={(cancellation) => void confirmCancellation(cancellation)}
+         />
       </div>
    );
 }

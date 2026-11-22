@@ -26,3 +26,17 @@ export async function getAppointmentPreVisitData(appointmentId) {
       `/staff/appointments/${encodeURIComponent(appointmentId)}/pre-visit-data`,
    );
 }
+
+export const STAFF_CANCELLATION_REASONS = [
+   { value: 'practitioner_unavailable', label: 'Practitioner unavailable' },
+   { value: 'patient_request', label: 'Patient request' },
+   { value: 'clinic_closure', label: 'Clinic closure' },
+   { value: 'other', label: 'Other' },
+];
+
+export function cancelStaffAppointment(appointmentId, { reason, reasonText }) {
+   return staffRequest(
+      `/staff/appointments/${encodeURIComponent(appointmentId)}/cancel`,
+      { method: 'PATCH', body: { reason, reasonText } },
+   );
+}

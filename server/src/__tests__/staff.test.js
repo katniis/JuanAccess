@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import {
+   mockMutationLog,
    mockQueryQueue,
    readJson,
    resetMocks,
@@ -38,8 +39,15 @@ const adminUser = {
 const token = (user) => jwt.sign({ id: user.id }, secret);
 const authHeader = (user) => ({ cookie: `token=${token(user)}` });
 
+let ctx;
+const staffCancel = (id, body) =>
+   fetch(`${ctx.baseUrl}/staff/appointments/${id}/cancel`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...authHeader(staffUser) },
+      body: JSON.stringify(body),
+   });
+
 describe('Staff Backend Routes & Controller', () => {
-   let ctx;
    beforeAll(async () => {
       ctx = await startServer();
    });
@@ -375,22 +383,55 @@ describe('Staff Backend Routes & Controller', () => {
             [staffUser],
             [appt], // select appointment
             [{ id: 401, status: 'cancelled' }], // update appointment
+            [], // insert audit entry
             [], // select waitlist offer
             [{ specialty: 'Internal Medicine' }], // provider
             [{ id: 1, durationMinutes: 30 }], // visitType
             [], // waitlist candidates
          );
 
-         const res = await fetch(
-            `${ctx.baseUrl}/staff/appointments/401/cancel`,
-            {
-               method: 'PATCH',
-               headers: authHeader(staffUser),
-            },
-         );
+         const res = await staffCancel(401, {
+            reason: 'other',
+            reasonText: '  Water outage in the building  ',
+         });
          expect(res.status).toBe(200);
          const body = await readJson(res);
          expect(body.message).toMatch(/cancelled successfully/i);
+
+         const update = mockMutationLog.find(
+            (entry) => entry.set?.status === 'cancelled',
+         );
+         expect(update.set).toMatchObject({
+            cancellationReason: 'other',
+            cancellationReasonText: 'Water outage in the building',
+            cancelledByUserId: staffUser.id,
+         });
+         expect(update.set.cancelledAt).toBeInstanceOf(Date);
+
+         const audit = mockMutationLog.find(
+            (entry) => entry.values?.action === 'staff_cancel',
+         );
+         expect(audit.values).toMatchObject({
+            entityType: 'appointment',
+            entityId: 401,
+            changedBy: staffUser.id,
+            newValue: {
+               status: 'cancelled',
+               reason: 'other',
+               reasonText: 'Water outage in the building',
+            },
+         });
+      });
+
+      it.each([
+         ['a missing reason', {}],
+         ['a patient-only category', { reason: 'feeling_better' }],
+         ['"other" without text', { reason: 'other', reasonText: '   ' }],
+      ])('rejects a staff cancel with %s', async (_label, payload) => {
+         mockQueryQueue.push([staffUser]);
+         const res = await staffCancel(401, payload);
+         expect(res.status).toBe(400);
+         expect(mockMutationLog).toHaveLength(0);
       });
 
       it('monitors waitlist entries', async () => {

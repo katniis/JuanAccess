@@ -535,6 +535,17 @@ describe('appointment routes', () => {
          });
       });
 
+      it('returns 400 when a patient gives a staff-only category', async () => {
+         mockQueryQueue.push([patientUser]);
+
+         const res = await cancel(ctx.baseUrl, 1, { reason: 'clinic_closure' });
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            error: 'A valid cancellation reason is required',
+         });
+      });
+
       it('returns 400 when the reason is Other without text', async () => {
          mockQueryQueue.push([patientUser]);
 

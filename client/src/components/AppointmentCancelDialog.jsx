@@ -7,6 +7,7 @@ function AppointmentCancelDialog({
    busy = false,
    onCancel,
    onConfirm,
+   reasons = PATIENT_CANCELLATION_REASONS,
 }) {
    const dialogRef = useRef(null);
    const contentRef = useRef(null);
@@ -110,7 +111,7 @@ function AppointmentCancelDialog({
                      <option value="" disabled>
                         Choose a reason
                      </option>
-                     {PATIENT_CANCELLATION_REASONS.map((option) => (
+                     {reasons.map((option) => (
                         <option key={option.value} value={option.value}>
                            {option.label}
                         </option>
