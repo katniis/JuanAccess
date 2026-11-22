@@ -33,6 +33,7 @@ import {
    updatePriorAuthDecision,
    verifyCoverageStaff,
 } from '../controller/staff.controller.js';
+import { draftCancellationLetterHandler } from '../controller/appointment.controller.js';
 import { requireStaff, requireStaffAdmin } from '../middleware/authRole.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 import {
@@ -70,6 +71,10 @@ router.get('/fee-schedule', getStaffFeeSchedule);
 // 2. Slots & Utilization
 router.get('/slots/utilization', getSlotsUtilization);
 router.patch('/appointments/:id/cancel', cancelAppointmentStaff);
+router.post(
+   '/appointments/:id/cancellation-letter/draft',
+   draftCancellationLetterHandler,
+);
 router.patch('/appointments/:id/reschedule', rescheduleAppointmentStaff);
 router.get('/waitlist', getWaitlistMonitor);
 

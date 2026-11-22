@@ -17,6 +17,10 @@ import { createPriorAuthorizationForAppointment } from '../services/prior-auth.s
 import { notifyPatient } from '../services/notification.service.js';
 import { generatePriorAuthDraft } from '../services/prior-auth-draft.service.js';
 import { parseCancellationReason } from '../utils/cancellationReasons.js';
+import {
+   draftCancellationLetter,
+   parseCancellationLetter,
+} from '../services/cancellation-letter.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
@@ -542,6 +546,7 @@ export const cancelAppointment = async (req, res) => {
                   status: 'cancelled',
                   cancellationReason: reason,
                   cancellationReasonText: reasonText,
+                  cancellationLetter: parseCancellationLetter(req.body?.letter),
                   cancelledByUserId: req.user.id,
                   cancelledAt: now,
                   updatedAt: now,
@@ -722,3 +727,43 @@ function endOfDay(value) {
    result.setHours(23, 59, 59, 999);
    return result;
 }
+
+// Shared by the patient and staff routes: the caller's role picks the letter direction.
+export const draftCancellationLetterHandler = async (req, res) => {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid appointment ID' });
+   }
+   const isPatient = req.user?.role === 'patient';
+   if (isPatient && !req.user.patientId) {
+      return res.status(403).json({ error: 'Patient account is not linked' });
+   }
+   const { error, reason, reasonText } = parseCancellationReason(
+      req.user?.role,
+      req.body,
+   );
+   if (error) {
+      return res.status(400).json({ error });
+   }
+   try {
+      const draft = await draftCancellationLetter({
+         appointmentId: id,
+         patientId: isPatient ? req.user.patientId : null,
+         direction: isPatient ? 'patient' : 'staff',
+         reason,
+         reasonText,
+         candidateDates: req.body?.candidateDates,
+      });
+      if (!draft) {
+         return res
+            .status(404)
+            .json({ error: 'Appointment not found or cannot be cancelled' });
+      }
+      return res.json(draft);
+   } catch (error) {
+      console.error('Failed to draft Cancellation Letter:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to draft Cancellation Letter' });
+   }
+};

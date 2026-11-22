@@ -55,9 +55,22 @@ export const STAFF_CANCELLATION_REASONS = [
    { value: 'other', label: 'Other' },
 ];
 
-export function cancelStaffAppointment(appointmentId, { reason, reasonText }) {
+export function cancelStaffAppointment(
+   appointmentId,
+   { reason, reasonText, letter },
+) {
    return staffRequest(
       `/staff/appointments/${encodeURIComponent(appointmentId)}/cancel`,
-      { method: 'PATCH', body: { reason, reasonText } },
+      { method: 'PATCH', body: { reason, reasonText, letter } },
+   );
+}
+
+export function draftStaffCancellationLetter(
+   appointmentId,
+   { reason, reasonText, candidateDates },
+) {
+   return staffRequest(
+      `/staff/appointments/${encodeURIComponent(appointmentId)}/cancellation-letter/draft`,
+      { method: 'POST', body: { reason, reasonText, candidateDates } },
    );
 }

@@ -3361,6 +3361,7 @@ dialog::-webkit-scrollbar,
    font-weight: 600;
 }
 .appointment-cancel-field select,
+.appointment-cancel-field input,
 .appointment-cancel-field textarea {
    width: 100%;
    padding: 10px 12px;
@@ -3373,6 +3374,14 @@ dialog::-webkit-scrollbar,
 }
 .appointment-cancel-field textarea {
    resize: vertical;
+}
+.appointment-cancel-draft {
+   margin-top: 10px;
+}
+.appointment-cancel-error {
+   margin: 8px 0 0;
+   color: #b42318;
+   font-size: var(--type-small);
 }
 .appointment-cancel-actions {
    display: flex;

@@ -660,6 +660,7 @@ function StaffSchedule() {
             appointment={appointmentToCancel}
             busy={cancelling}
             reasons={STAFF_CANCELLATION_REASONS}
+            direction="staff"
             onCancel={() => setAppointmentToCancel(null)}
             onConfirm={(cancellation) => void confirmCancellation(cancellation)}
          />

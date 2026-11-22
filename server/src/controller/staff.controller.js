@@ -35,6 +35,7 @@ import {
 } from '../services/billing.service.js';
 import { manilaDateBounds } from '../utils/timezone.js';
 import { parseCancellationReason } from '../utils/cancellationReasons.js';
+import { parseCancellationLetter } from '../services/cancellation-letter.service.js';
 import {
    isOnDuty,
    listDutyOverrides,
@@ -301,6 +302,7 @@ export const cancelAppointmentStaff = async (req, res) => {
          userId: req.user.id,
          reason,
          reasonText,
+         letter: parseCancellationLetter(req.body?.letter),
       });
       if (!result) {
          return res
