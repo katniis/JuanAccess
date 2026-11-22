@@ -14,7 +14,6 @@ const navigation = [
    { label: 'Dashboard', path: '/staff', icon: 'grid', end: true },
    { label: 'Provider Schedule', path: '/staff/schedule', icon: 'calendar' },
    { label: 'Slot Management', path: '/staff/slots', icon: 'grid' },
-   { label: 'APE Queue', path: '/staff/ape-queue', icon: 'calendar' },
    { label: 'Prior Auth Queue', path: '/staff/prior-auth', icon: 'folder' },
    { label: 'Appeals Queue', path: '/staff/appeals', icon: 'scale' },
    { label: 'Disputes', path: '/staff/disputes', icon: 'receipt' },

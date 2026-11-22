@@ -89,7 +89,7 @@ export function buildAttentionItems(
          id: `appointment-${appointment.id}`,
          icon: 'calendar',
          title: `Appointment check-in pending: ${appointment.visitTypeName}`,
-         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} (${genderLabel(appointment.patientGender)}) · ${appointment.providerFirstName ? `Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}` : 'Assigned on the day'}`,
+         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} (${genderLabel(appointment.patientGender)}) · ${appointment.providerFirstName ? `Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}` : 'Not assigned'}`,
          status: 'Pending',
          tone: 'pending',
          sort: new Date(appointment.scheduledStart).getTime(),

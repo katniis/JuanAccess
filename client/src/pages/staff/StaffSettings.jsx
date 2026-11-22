@@ -5,7 +5,6 @@ import ErrorState from '../../components/ErrorState.jsx';
 import InsuranceVerificationQueue from '../../components/InsuranceVerificationQueue.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import StaffAccess from './StaffAccess.jsx';
-import StaffApeCapacity from './StaffApeCapacity.jsx';
 import StaffPractitioners from './StaffPractitioners.jsx';
 import { useAuth } from '../../contexts/useAuth.js';
 import {
@@ -115,7 +114,6 @@ function StaffSettings() {
                <InsuranceVerificationQueue />
                <StaffAccess />
                <StaffPractitioners />
-               <StaffApeCapacity />
             </>
          )}
       </div>

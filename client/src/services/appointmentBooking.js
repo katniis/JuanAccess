@@ -59,27 +59,6 @@ export async function findAvailableAppointments({
    });
 }
 
-// APE Booking: the patient's included Procedures, itemized sum and open Arrival Windows per date.
-export function getApeAvailability({ packageId, rangeStart, rangeEnd }) {
-   const params = new URLSearchParams({
-      package_id: String(packageId),
-      range_start: rangeStart,
-      range_end: rangeEnd,
-   });
-   return patientRequest('/appointment/ape/availability?' + params);
-}
-
-export function bookApe({ packageId, arrivalWindowId, date }) {
-   return patientRequest('/appointment/ape', {
-      method: 'POST',
-      body: {
-         package_id: Number(packageId),
-         arrival_window_id: Number(arrivalWindowId),
-         date,
-      },
-   });
-}
-
 export function bookAppointment({ visitTypeId, slot }) {
    return patientRequest('/appointment', {
       method: 'POST',
