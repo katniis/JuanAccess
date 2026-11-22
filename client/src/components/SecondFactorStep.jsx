@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import OtpInput from './OtpInput.jsx';
 import {
    confirmSecondFactorSetup,
    startSecondFactorSetup,
@@ -19,6 +20,8 @@ function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
    const [completedUser, setCompletedUser] = useState(null);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const [attempt, setAttempt] = useState(0);
+   const inFlight = useRef(false);
    const askEnrolmentCode = isSetup && needsEnrolmentCode && !setup;
 
    useEffect(() => {
@@ -45,28 +48,44 @@ function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
       }
    };
 
-   const submit = async (event) => {
-      event.preventDefault();
+   // Auto-submit (6th digit), Enter and the Verify button all land here; the
+   // ref blocks a second request before React re-renders with isSubmitting,
+   // since each wrong code counts toward the account lockout.
+   const submitCode = async (value) => {
+      if (inFlight.current || (isSetup && !setup)) return;
+      if (!useRecoveryCode && !/^\d{6}$/.test(value)) return;
+      inFlight.current = true;
       setError('');
       setIsSubmitting(true);
       try {
          if (isSetup) {
-            const result = await confirmSecondFactorSetup(code.trim());
+            const result = await confirmSecondFactorSetup(value);
             setCompletedUser(result.user);
             setRecoveryCodes(result.recoveryCodes);
          } else {
             const result = await verifySecondFactor(
                useRecoveryCode
-                  ? { recoveryCode: code.trim() }
-                  : { code: code.trim() },
+                  ? { recoveryCode: value.trim() }
+                  : { code: value },
             );
             await onComplete(result.user);
          }
       } catch (submitError) {
          setError(submitError.message || 'That code did not work.');
+         if (!useRecoveryCode) {
+            // Fresh boxes; the new key remounts them so autoFocus refocuses box 1.
+            setCode('');
+            setAttempt((current) => current + 1);
+         }
       } finally {
+         inFlight.current = false;
          setIsSubmitting(false);
       }
+   };
+
+   const submit = (event) => {
+      event.preventDefault();
+      submitCode(code);
    };
 
    if (recoveryCodes) {
@@ -170,19 +189,36 @@ function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
             <label htmlFor="second-factor-code">
                {useRecoveryCode ? 'Recovery Code' : '6-digit code'}
             </label>
-            <input
-               id="second-factor-code"
-               name="code"
-               type="text"
-               inputMode={useRecoveryCode ? 'text' : 'numeric'}
-               autoComplete="one-time-code"
-               pattern={useRecoveryCode ? undefined : '[0-9]{6}'}
-               maxLength={useRecoveryCode ? 20 : 6}
-               value={code}
-               onChange={(event) => setCode(event.target.value)}
-               required
-               autoFocus
-            />
+            {useRecoveryCode ? (
+               <input
+                  id="second-factor-code"
+                  name="code"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="one-time-code"
+                  maxLength={20}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  required
+                  autoFocus
+               />
+            ) : (
+               <OtpInput
+                  // Remount (autoFocus box 1) after a rejected code and once setup loads.
+                  key={`${attempt}-${Boolean(setup)}`}
+                  id="second-factor-code"
+                  value={code}
+                  onChange={setCode}
+                  onComplete={submitCode}
+                  disabled={isSubmitting || (isSetup && !setup)}
+                  invalid={Boolean(error) && !code}
+                  describedBy={error ? 'second-factor-error' : undefined}
+                  autoFocus
+               />
+            )}
+            <p className="otp-input-status" aria-live="polite">
+               {isSubmitting && !useRecoveryCode ? 'Verifying…' : ''}
+            </p>
          </div>
 
          {!isSetup && (
@@ -203,7 +239,7 @@ function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
          )}
 
          {error && (
-            <p className="auth-error" role="alert">
+            <p id="second-factor-error" className="auth-error" role="alert">
                {error}
             </p>
          )}
@@ -215,7 +251,11 @@ function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
             <button
                className="auth-submit"
                type="submit"
-               disabled={isSubmitting || (isSetup && !setup)}>
+               disabled={
+                  isSubmitting ||
+                  (isSetup && !setup) ||
+                  (!useRecoveryCode && code.length !== 6)
+               }>
                {isSubmitting ? 'Please wait…' : 'Verify'}
             </button>
          </div>
