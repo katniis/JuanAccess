@@ -11,6 +11,7 @@ import staffRoute from './routes/staff.route.js';
 import billingRoute from './routes/billing.route.js';
 import notificationRoute from './routes/notification.route.js';
 import priceListRoute from './routes/price-list.route.js';
+import doctorDirectoryRoute from './routes/doctor-directory.route.js';
 
 process.env.TZ = process.env.CLINIC_TIME_ZONE;
 
@@ -48,6 +49,7 @@ app.use('/staff', staffRoute);
 app.use('/bills', billingRoute);
 app.use('/notifications', notificationRoute);
 app.use('/price-list', priceListRoute);
+app.use('/doctors', doctorDirectoryRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });
