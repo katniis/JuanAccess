@@ -99,9 +99,13 @@ function AuthPage({ mode = 'signin' }) {
          user.role === 'patient'
             ? requestedPath?.startsWith('/patient')
             : requestedPath?.startsWith('/staff');
-      navigate(canReturnToRequestedPage ? requestedPath : homePath, {
-         replace: true,
-      });
+      const requestedSearch = location.state?.from?.search || '';
+      navigate(
+         canReturnToRequestedPage ? requestedPath + requestedSearch : homePath,
+         {
+            replace: true,
+         },
+      );
    };
 
    const completeSecondFactor = async (user) => {
@@ -230,6 +234,9 @@ function AuthPage({ mode = 'signin' }) {
                <img src="/juanaccess-logo.svg" alt="JuanAccess" />
             </Link>
             <p>Patient and staff portal</p>
+            <Link className="public-nav-link" to="/doctors">
+               Meet Our Doctors
+            </Link>
          </header>
 
          <div className="auth-content">

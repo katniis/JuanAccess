@@ -10,6 +10,9 @@ function PrivacyPolicy() {
             <Link className="auth-brand-mark" to="/" aria-label="JuanAccess">
                <img src="/juanaccess-logo.svg" alt="JuanAccess" />
             </Link>
+            <Link className="public-nav-link" to="/doctors">
+               Meet Our Doctors
+            </Link>
          </header>
 
          <article>
