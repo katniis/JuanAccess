@@ -202,7 +202,7 @@ describe('POST /auth/register/provider', () => {
       });
    });
 
-   it('returns 201 with the created user and provider and sets a token cookie', async () => {
+   it('returns 201 with the created user and provider without signing the admin in as them', async () => {
       const token = jwt.sign({ id: 5 }, secret, { expiresIn: '30d' });
       mockQueryQueue.push([staffAdmin], []);
       mockQueryQueue.push([{ id: 201 }], [createdUser]);
@@ -219,6 +219,6 @@ describe('POST /auth/register/provider', () => {
       expect(body.message).toBe('User and provider registered successfully.');
       expect(body.user).toEqual(createdUser);
       expect(body.provider).toEqual({ id: 201 });
-      expect(getCookie(res, 'token')).toBeTruthy();
+      expect(getCookie(res, 'token')).toBeNull();
    });
 });

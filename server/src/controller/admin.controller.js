@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { recordAudit } from '../services/audit.service.js';
 import {
@@ -13,6 +13,7 @@ import {
    insurancePlans,
    providerAvailability,
    providers,
+   recoveryCodes,
    rooms,
    userInvitations,
    users,
@@ -220,6 +221,49 @@ export async function updateAdminUser(req, res) {
    } catch (error) {
       console.error('Failed to update user:', error);
       return res.status(500).json({ error: 'Failed to update user' });
+   }
+}
+
+// Clears the target's Second Factor and bumps authVersion, signing them out everywhere;
+// their next login is sent to Second Factor setup.
+export async function resetUserSecondFactor(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid user ID' });
+   try {
+      const reset = await db.transaction(async (tx) => {
+         const [row] = await tx
+            .update(users)
+            .set({
+               totpSecretEncrypted: null,
+               totpEnabledAt: null,
+               failedLoginAttempts: 0,
+               lockedUntil: null,
+               authVersion: sql`${users.authVersion} + 1`,
+            })
+            .where(
+               and(
+                  eq(users.id, id),
+                  inArray(users.role, ['staff', 'staff_admin']),
+               ),
+            )
+            .returning({ id: users.id });
+         if (!row) return false;
+         await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, id));
+         return true;
+      });
+      if (!reset)
+         return res.status(404).json({ error: 'Staff user not found' });
+      void recordAudit({
+         entityType: 'user',
+         entityId: id,
+         action: 'second_factor_reset',
+         changedBy: req.user.id,
+      });
+      return res.json({ id, secondFactor: 'setup_required' });
+   } catch (error) {
+      console.error('Failed to reset Second Factor:', error);
+      return res.status(500).json({ error: 'Failed to reset Second Factor' });
    }
 }
 

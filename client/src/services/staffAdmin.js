@@ -16,3 +16,10 @@ export async function createStaffInvitation(details) {
       },
    });
 }
+
+// Clears the user's Second Factor and signs them out everywhere.
+export async function resetStaffSecondFactor(userId) {
+   return staffRequest(`/staff/admin/users/${userId}/second-factor/reset`, {
+      method: 'POST',
+   });
+}
