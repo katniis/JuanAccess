@@ -108,6 +108,37 @@ describe('Staff Backend Routes & Controller', () => {
          expect(body.snapshot.openWaitlistSlotsCount).toBe(3);
          expect(body.todayAppointments).toHaveLength(1);
       });
+
+      it('lists an appointment with no practitioner or room', async () => {
+         const noPractitioner = {
+            id: 102,
+            scheduledStart: new Date().toISOString(),
+            patientFirstName: 'Ana',
+            patientLastName: 'Reyes',
+            providerId: null,
+            providerFirstName: null,
+            providerLastName: null,
+            roomId: null,
+            roomName: null,
+         };
+         mockQueryQueue.push(
+            [staffUser],
+            [{ count: 1 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [noPractitioner],
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/staff/dashboard`, {
+            headers: authHeader(staffUser),
+         });
+
+         expect(res.status).toBe(200);
+         expect((await readJson(res)).todayAppointments).toEqual([
+            noPractitioner,
+         ]);
+      });
    });
 
    describe('Doctor Search & Schedule', () => {
@@ -295,6 +326,37 @@ describe('Staff Backend Routes & Controller', () => {
          const body = await readJson(res);
          expect(body.totalBookedAppointments).toBe(1);
          expect(body.rooms[0].bookedMinutes).toBe(45);
+      });
+
+      it('counts an appointment with no room or practitioner in utilization', async () => {
+         mockQueryQueue.push(
+            [staffUser],
+            [{ id: 1, name: 'Exam 1', roomType: 'exam' }],
+            [],
+            [{ id: 1, firstName: 'Amanda', lastName: 'Torres' }],
+            [
+               {
+                  id: 402,
+                  roomId: null,
+                  equipmentId: null,
+                  providerId: null,
+                  scheduledStart: '2026-10-04T09:00:00.000Z',
+                  scheduledEnd: '2026-10-04T09:45:00.000Z',
+                  status: 'scheduled',
+                  visitTypeName: 'Annual Physical Examination',
+               },
+            ],
+            [],
+         );
+
+         const res = await fetch(
+            `${ctx.baseUrl}/staff/slots/utilization?date=2026-10-04`,
+            { headers: authHeader(staffUser) },
+         );
+
+         expect(res.status).toBe(200);
+         const body = await readJson(res);
+         expect(body.rooms[0].bookedMinutes).toBe(0);
       });
 
       it('cancels appointment as staff override', async () => {
