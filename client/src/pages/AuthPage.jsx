@@ -172,10 +172,13 @@ function AuthPage({ mode = 'signin' }) {
                privacy_consent: privacyConsent,
             });
          } else if (isInvitation) {
-            user = await acceptStaffInvitation({
+            // The invite is now used; the session waits for Second Factor setup.
+            const result = await acceptStaffInvitation({
                token: invitationToken,
                password,
             });
+            setSecondFactorStep(result.secondFactor);
+            return;
          } else {
             const result = await signIn({ email, password, rememberMe });
             if (result.secondFactor) {
@@ -270,6 +273,11 @@ function AuthPage({ mode = 'signin' }) {
                      mode={secondFactorStep}
                      onComplete={completeSecondFactor}
                      onCancel={() => {
+                        // A used invite can't be resubmitted; finish setup via sign-in.
+                        if (isInvitation) {
+                           navigate('/login', { replace: true });
+                           return;
+                        }
                         setSecondFactorStep(null);
                         setPassword('');
                         setError('');

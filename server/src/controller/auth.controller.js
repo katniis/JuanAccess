@@ -335,7 +335,7 @@ export const providerRegister = async (req, res) => {
          return { provider, user };
       });
 
-      res.cookie('token', generateToken(result.user.id), cookieOptions);
+      // No cookie: the new staff member sets up their Second Factor at first login.
       return res.status(201).json({
          message: 'User and provider registered successfully.',
          user: result.user,
@@ -403,8 +403,9 @@ export const acceptStaffInvitation = async (req, res) => {
          return res
             .status(409)
             .json({ message: 'Email is already registered.' });
-      res.cookie('token', generateToken(result.user.id), cookieOptions);
-      return res.status(201).json({ user: safeUser(result.user) });
+      // No session until the invited staff member finishes Second Factor setup.
+      setPendingCookie(res, result.user, 'second_factor_setup');
+      return res.status(201).json({ secondFactor: 'setup_required' });
    } catch (error) {
       console.error('Invitation acceptance failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
@@ -450,15 +451,7 @@ export const login = async (req, res) => {
             user.totpEnabledAt && user.totpSecretEncrypted,
          );
          const purpose = enrolled ? 'second_factor' : 'second_factor_setup';
-         res.cookie(
-            secondFactorCookie,
-            jwt.sign(
-               { id: user.id, authVersion: user.authVersion ?? 0, purpose },
-               process.env.JWT_SECRET,
-               { expiresIn: '10m' },
-            ),
-            { ...cookieOptions, maxAge: pendingTokenMs },
-         );
+         setPendingCookie(res, user, purpose);
          audit('login_password_verified', { purpose });
          return res.json({
             secondFactor: enrolled ? 'required' : 'setup_required',
@@ -476,6 +469,17 @@ export const login = async (req, res) => {
 const pendingTokenMs = 10 * 60 * 1000;
 const secondFactorCookie = 'second_factor';
 const lockedMessage = 'Account is temporarily locked. Try again later.';
+
+const setPendingCookie = (res, user, purpose) =>
+   res.cookie(
+      secondFactorCookie,
+      jwt.sign(
+         { id: user.id, authVersion: user.authVersion ?? 0, purpose },
+         process.env.JWT_SECRET,
+         { expiresIn: '10m' },
+      ),
+      { ...cookieOptions, maxAge: pendingTokenMs },
+   );
 
 const isLocked = (user) =>
    Boolean(user.lockedUntil && new Date(user.lockedUntil) > new Date());

@@ -11,6 +11,7 @@ import {
 import {
    createStaffInvitation,
    getStaffUsers,
+   resetStaffSecondFactor,
 } from '../../services/staffAdmin.js';
 
 const expiryLabel = (value) =>
@@ -29,6 +30,7 @@ function StaffAccess() {
    const [copying, setCopying] = useState(false);
    const [error, setError] = useState('');
    const [invitation, setInvitation] = useState(null);
+   const [resettingId, setResettingId] = useState(null);
    const [form, setForm] = useState({
       firstName: '',
       lastName: '',
@@ -98,6 +100,28 @@ function StaffAccess() {
          setError('The link could not be copied. Select and copy it manually.');
       } finally {
          setCopying(false);
+      }
+   };
+
+   const resetSecondFactor = async (account) => {
+      const name = account.displayName || account.email;
+      if (
+         !window.confirm(
+            `Reset ${name}'s Second Factor? They will be signed out everywhere and must set it up again at their next sign-in.`,
+         )
+      )
+         return;
+      setResettingId(account.id);
+      try {
+         await resetStaffSecondFactor(account.id);
+         notify({
+            type: 'success',
+            message: `${name}'s Second Factor was reset. They will set it up at their next sign-in.`,
+         });
+      } catch (requestError) {
+         notify({ type: 'error', message: requestError.message });
+      } finally {
+         setResettingId(null);
       }
    };
 
@@ -253,6 +277,7 @@ function StaffAccess() {
                            <th>Email</th>
                            <th>Role</th>
                            <th>Account</th>
+                           <th>Second Factor</th>
                         </tr>
                      </thead>
                      <tbody>
@@ -267,6 +292,20 @@ function StaffAccess() {
                               </td>
                               <td>
                                  {account.isActive ? 'Active' : 'Inactive'}
+                              </td>
+                              <td>
+                                 <button
+                                    className="button button-outline"
+                                    type="button"
+                                    disabled={resettingId === account.id}
+                                    aria-label={`Reset Second Factor for ${account.displayName || account.email}`}
+                                    onClick={() =>
+                                       void resetSecondFactor(account)
+                                    }>
+                                    {resettingId === account.id
+                                       ? 'Resetting…'
+                                       : 'Reset'}
+                                 </button>
                               </td>
                            </tr>
                         ))}
