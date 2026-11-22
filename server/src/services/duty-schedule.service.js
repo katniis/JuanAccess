@@ -19,8 +19,17 @@ const within = (minutes, { startTime, endTime }) =>
    minutes >= toMinutes(startTime) && minutes < toMinutes(endTime);
 
 // A date override (day off or custom hours) replaces the weekly hours for that Manila date.
+export const effectiveDutyWindows = (override, weeklyWindows) =>
+   override ? (override.isDayOff ? [] : [override]) : weeklyWindows;
+
 export async function isOnDuty(practitionerId, at, executor = db) {
    const minutes = manilaMinutesOfDay(at);
+   const windows = await dutyWindowsOn(practitionerId, at, executor);
+   return windows.some((window) => within(minutes, window));
+}
+
+// The Practitioner's { startTime, endTime } duty windows on the Manila date of `at`.
+export async function dutyWindowsOn(practitionerId, at, executor = db) {
    const [override] = await executor
       .select({
          isDayOff: dutyScheduleOverrides.isDayOff,
@@ -35,9 +44,9 @@ export async function isOnDuty(practitionerId, at, executor = db) {
          ),
       )
       .limit(1);
-   if (override) return !override.isDayOff && within(minutes, override);
+   if (override) return effectiveDutyWindows(override);
 
-   const weekly = await executor
+   return executor
       .select({
          startTime: providerAvailability.startTime,
          endTime: providerAvailability.endTime,
@@ -49,7 +58,6 @@ export async function isOnDuty(practitionerId, at, executor = db) {
             eq(providerAvailability.dayOfWeek, manilaDayOfWeek(at)),
          ),
       );
-   return weekly.some((window) => within(minutes, window));
 }
 
 export function listDutyOverrides(practitionerId) {

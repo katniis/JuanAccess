@@ -9,6 +9,7 @@ import {
    postJson,
 } from './helpers.js';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { manilaDateString, manilaDayOfWeek } from '../utils/timezone.js';
 
 const secret = process.env.JWT_SECRET;
 
@@ -59,6 +60,11 @@ const futureDay = () => {
    day.setHours(0, 0, 0, 0);
    return day;
 };
+
+// Clinic times are Manila wall-clock times, whatever the test process's time zone.
+const manilaDate = (offsetDays = 2) =>
+   manilaDateString(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000));
+const manilaAt = (date, time) => new Date(`${date}T${time}+08:00`);
 
 const validReason = { reason: 'schedule_conflict' };
 
@@ -281,39 +287,101 @@ describe('appointment routes', () => {
          expect(await readJson(res)).toEqual({ error: 'Visit type not found' });
       });
 
-      it('returns 200 with available slots', async () => {
-         const day = futureDay();
-         const rangeStart = day.toISOString();
-         const provider = {
-            providerId: 7,
-            firstName: 'Doc',
-            lastName: 'Tor',
-            dayOfWeek: day.getDay(),
-            startTime: '09:00:00',
-            endTime: '17:00:00',
-         };
+      const slotDate = manilaDate();
+      const weeklyPractitioner = {
+         providerId: 7,
+         firstName: 'Doc',
+         lastName: 'Tor',
+         dayOfWeek: manilaDayOfWeek(manilaAt(slotDate, '12:00:00')),
+         startTime: '09:00:00',
+         endTime: '17:00:00',
+      };
+      const searchSlots = () =>
+         get(
+            ctx.baseUrl,
+            `/appointment/available-slots?${new URLSearchParams({
+               visit_type_id: '1',
+               range_start: slotDate,
+               range_end: slotDate,
+            })}`,
+            patientToken,
+         );
+
+      it('returns no slots on a Duty Schedule day off', async () => {
          mockQueryQueue.push(
             [patientUser],
             [visitType],
-            [provider],
+            [weeklyPractitioner],
             [],
             [{ id: 5 }],
+            [
+               {
+                  providerId: 7,
+                  overrideDate: slotDate,
+                  isDayOff: true,
+                  startTime: null,
+                  endTime: null,
+               },
+            ],
          );
 
-         const params = new URLSearchParams({
-            visit_type_id: '1',
-            range_start: rangeStart,
-            range_end: rangeStart,
-         });
-         const res = await get(
-            ctx.baseUrl,
-            `/appointment/available-slots?${params}`,
-            patientToken,
+         const res = await searchSlots();
+
+         expect(res.status).toBe(200);
+         expect((await readJson(res)).slots).toEqual([]);
+      });
+
+      it('uses Duty Schedule custom hours instead of the weekly hours', async () => {
+         mockQueryQueue.push(
+            [patientUser],
+            [visitType],
+            [weeklyPractitioner],
+            [],
+            [{ id: 5 }],
+            [
+               {
+                  providerId: 7,
+                  overrideDate: slotDate,
+                  isDayOff: false,
+                  startTime: '13:00:00',
+                  endTime: '14:00:00',
+               },
+            ],
          );
+
+         const res = await searchSlots();
+
+         expect(res.status).toBe(200);
+         // 30-minute visits plus a 15-minute grace fit once in 13:00-14:00 Manila.
+         expect(
+            (await readJson(res)).slots.map((slot) => [slot.start, slot.end]),
+         ).toEqual([
+            [
+               manilaAt(slotDate, '13:00:00').toISOString(),
+               manilaAt(slotDate, '13:30:00').toISOString(),
+            ],
+         ]);
+      });
+
+      it('returns 200 with available slots', async () => {
+         mockQueryQueue.push(
+            [patientUser],
+            [visitType],
+            [weeklyPractitioner],
+            [],
+            [{ id: 5 }],
+            [],
+         );
+
+         const res = await searchSlots();
 
          expect(res.status).toBe(200);
          const body = await readJson(res);
          expect(body.visit_type).toBe('General Checkup');
+         // Weekly hours are Manila wall-clock times.
+         expect(body.slots[0].start).toBe(
+            manilaAt(slotDate, '09:00:00').toISOString(),
+         );
          expect(Array.isArray(body.slots)).toBe(true);
          expect(body.slots.length).toBeGreaterThan(0);
          expect(body.slots[0]).toHaveProperty('provider_id', 7);
@@ -410,10 +478,40 @@ describe('appointment routes', () => {
          expect(filteredToPhysicians()).toBe(true);
       });
 
+      it('returns 409 on a Duty Schedule day off despite weekly hours', async () => {
+         const date = manilaDate();
+         mockQueryQueue.push(
+            [patientUser],
+            [visitType],
+            [{ id: 11 }],
+            [{ isDayOff: true, startTime: null, endTime: null }],
+            [{ startTime: '09:00:00', endTime: '17:00:00' }],
+         );
+
+         const res = await postJson(
+            ctx.baseUrl,
+            '/appointment',
+            {
+               visit_type_id: 1,
+               provider_id: 11,
+               start: manilaAt(date, '10:00:00').toISOString(),
+               end: manilaAt(date, '10:30:00').toISOString(),
+            },
+            authHeader(patientToken),
+         );
+
+         expect(res.status).toBe(409);
+         expect(await readJson(res)).toEqual({
+            error: 'Appointment falls outside provider availability',
+         });
+         expect(mockMutationLog).toHaveLength(0);
+      });
+
       it('returns 201 and creates the appointment', async () => {
-         const start = futureDay();
-         start.setHours(10, 0, 0, 0);
-         const end = new Date(start.getTime() + 30 * 60000);
+         // 10:00 Manila sits inside weekly 09:00-17:00 Manila hours.
+         const date = manilaDate();
+         const start = manilaAt(date, '10:00:00');
+         const end = manilaAt(date, '10:30:00');
          const created = {
             id: 99,
             patientId: 10,
@@ -430,6 +528,7 @@ describe('appointment routes', () => {
             [patientUser],
             [visitType],
             [{ id: 11 }],
+            [],
             [{ startTime: '09:00:00', endTime: '17:00:00' }],
             [{ id: 5 }],
             [],

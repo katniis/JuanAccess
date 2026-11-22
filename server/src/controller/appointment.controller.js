@@ -1,9 +1,22 @@
-import { and, asc, desc, eq, gt, lt, ne, or } from 'drizzle-orm';
+import {
+   and,
+   asc,
+   desc,
+   eq,
+   gt,
+   gte,
+   inArray,
+   lt,
+   lte,
+   ne,
+   or,
+} from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
    apePackages,
    appointments,
    arrivalWindows,
+   dutyScheduleOverrides,
    equipment,
    preVisitSummaries,
    providerAvailability,
@@ -15,6 +28,16 @@ import {
 } from '../db/schema/index.js';
 import { APE_VISIT_TYPE_NAME } from './ape-booking.controller.js';
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
+import {
+   dutyWindowsOn,
+   effectiveDutyWindows,
+} from '../services/duty-schedule.service.js';
+import {
+   manilaDateBounds,
+   manilaDateString,
+   manilaDayOfWeek,
+   manilaMinutesOfDay,
+} from '../utils/timezone.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 import { createPriorAuthorizationForAppointment } from '../services/prior-auth.service.js';
 import { notifyPatient } from '../services/notification.service.js';
@@ -131,7 +154,8 @@ export const getAvailableSlots = async (req, res) => {
             endTime: providerAvailability.endTime,
          })
          .from(providers)
-         .innerJoin(
+         // Left join: custom-hours overrides can open a day with no weekly hours.
+         .leftJoin(
             providerAvailability,
             eq(providerAvailability.providerId, providers.id),
          );
@@ -186,9 +210,38 @@ export const getAvailableSlots = async (req, res) => {
          roomIds = availableRooms.map((room) => room.id);
       }
 
+      const providerIds = [
+         ...new Set(eligibleProviders.map((row) => row.providerId)),
+      ];
+      const overrides = providerIds.length
+         ? await db
+              .select({
+                 providerId: dutyScheduleOverrides.providerId,
+                 overrideDate: dutyScheduleOverrides.overrideDate,
+                 isDayOff: dutyScheduleOverrides.isDayOff,
+                 startTime: dutyScheduleOverrides.startTime,
+                 endTime: dutyScheduleOverrides.endTime,
+              })
+              .from(dutyScheduleOverrides)
+              .where(
+                 and(
+                    inArray(dutyScheduleOverrides.providerId, providerIds),
+                    gte(
+                       dutyScheduleOverrides.overrideDate,
+                       manilaDateString(start),
+                    ),
+                    lte(
+                       dutyScheduleOverrides.overrideDate,
+                       manilaDateString(end),
+                    ),
+                 ),
+              )
+         : [];
+
       const slots = findAvailableSlots(
          visitType,
          eligibleProviders,
+         overrides,
          busy,
          roomIds,
          req.user.patientId,
@@ -245,7 +298,7 @@ export const createAppointment = async (req, res) => {
       Number.isNaN(endDate.getTime()) ||
       startDate >= endDate ||
       startDate <= new Date() ||
-      startDate.toDateString() !== endDate.toDateString()
+      manilaDateString(startDate) !== manilaDateString(endDate)
    ) {
       return res.status(400).json({
          error: 'Valid visit_type_id, provider_id, start, and end are required',
@@ -279,10 +332,6 @@ export const createAppointment = async (req, res) => {
             const [provider] = await tx
                .select({ id: providers.id })
                .from(providers)
-               .innerJoin(
-                  providerAvailability,
-                  eq(providerAvailability.providerId, providers.id),
-               )
                .where(
                   and(
                      eq(providers.id, Number(providerId)),
@@ -291,7 +340,6 @@ export const createAppointment = async (req, res) => {
                      requiredSpecialty
                         ? eq(providers.specialty, requiredSpecialty)
                         : undefined,
-                     eq(providerAvailability.dayOfWeek, startDate.getDay()),
                   ),
                )
                .limit(1);
@@ -302,21 +350,14 @@ export const createAppointment = async (req, res) => {
                };
             }
 
-            const availability = await tx
-               .select({
-                  startTime: providerAvailability.startTime,
-                  endTime: providerAvailability.endTime,
-               })
-               .from(providerAvailability)
-               .where(
-                  and(
-                     eq(providerAvailability.providerId, Number(providerId)),
-                     eq(providerAvailability.dayOfWeek, startDate.getDay()),
-                  ),
-               );
-            const startMinutes =
-               startDate.getHours() * 60 + startDate.getMinutes();
-            const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+            // Duty Schedule for the Manila date: overrides replace weekly hours.
+            const availability = await dutyWindowsOn(
+               Number(providerId),
+               startDate,
+               tx,
+            );
+            const startMinutes = manilaMinutesOfDay(startDate);
+            const endMinutes = manilaMinutesOfDay(endDate);
             const withinAvailability = availability.some(
                (window) =>
                   startMinutes >= timeToMinutes(window.startTime) &&
@@ -627,6 +668,7 @@ export const cancelAppointment = async (req, res) => {
 function findAvailableSlots(
    visitType,
    availability,
+   overrides,
    busy,
    roomIds,
    patientId,
@@ -644,14 +686,22 @@ function findAvailableSlots(
       byProvider.set(row.providerId, rows);
    }
 
-   const lastDay = endOfDay(rangeEnd);
+   const overrideFor = new Map(
+      overrides.map((row) => [`${row.providerId}:${row.overrideDate}`, row]),
+   );
+
+   const lastDay = manilaDateString(rangeEnd);
    for (const [providerId, days] of byProvider) {
       for (
-         let day = new Date(rangeStart);
+         let day = manilaDateString(rangeStart);
          day <= lastDay;
-         day.setDate(day.getDate() + 1)
+         day = manilaDateString(atTime(day, 36 * 60)) // noon of the next day
       ) {
-         const windows = days.filter((item) => item.dayOfWeek === day.getDay());
+         const dayOfWeek = manilaDayOfWeek(atTime(day, 12 * 60));
+         const windows = effectiveDutyWindows(
+            overrideFor.get(`${providerId}:${day}`),
+            days.filter((item) => item.dayOfWeek === dayOfWeek),
+         );
          for (const window of windows) {
             const open = Math.max(
                timeToMinutes(window.startTime),
@@ -724,10 +774,11 @@ function findAvailableSlots(
    );
 }
 
+// `minutes` after Manila midnight of the Manila date string `day`.
 function atTime(day, minutes) {
-   const result = new Date(day);
-   result.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-   return result;
+   return new Date(
+      manilaDateBounds(day).startOfDay.getTime() + minutes * 60 * 1000,
+   );
 }
 
 function timeToMinutes(value) {
@@ -744,9 +795,7 @@ function normalizeSpecialty(value) {
 }
 
 function endOfDay(value) {
-   const result = new Date(value);
-   result.setHours(23, 59, 59, 999);
-   return result;
+   return manilaDateBounds(manilaDateString(value)).endOfDay;
 }
 
 // Shared by the patient and staff routes: the caller's role picks the letter direction.
