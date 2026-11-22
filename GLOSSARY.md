@@ -53,19 +53,15 @@ _Avoid_: Cancellation email, notice
 ## Transparency
 
 **Doctor Profile**:
-The public record of a physician Practitioner: specialization, education, credentials, practice start year, and background.
-_Avoid_: Provider bio
-
-**Doctor Directory**:
-The public list of Doctor Profiles patients can browse before booking.
-_Avoid_: Meet Our Doctors (UI label only)
+A physician Practitioner's profile: specialization, education, credentials, practice start year, background, and Consultation Fee. Shown to signed-in users from the booking page (the provider on each available slot opens it); never public.
+_Avoid_: Provider bio, Doctor Directory (there is no public list of doctors)
 
 **Price List**:
-The public list of cash prices for every Procedure and each physician's Consultation Fee, in PHP.
+The public list of cash prices for every Procedure, in PHP. It names no doctors.
 _Avoid_: Fee schedule (the internal source table), rates
 
 **Consultation Fee**:
-A physician's own price for a regular consult, shown on their Doctor Profile and the Price List.
+A physician's own price for a regular consult, shown to signed-in patients on each available booking slot and on the Doctor Profile.
 _Avoid_: Professional fee, PF
 
 ## Privacy
