@@ -645,10 +645,7 @@ describe('appointment routes', () => {
             unused,
          );
 
-         const res = await fetch(`${ctx.baseUrl}/appointment/1`, {
-            method: 'DELETE',
-            headers: authHeader(patientToken),
-         });
+         const res = await cancel(ctx.baseUrl, 1, validReason);
 
          expect(res.status).toBe(204);
          // Only waitlist offers read the practitioner; none for an APE Booking.

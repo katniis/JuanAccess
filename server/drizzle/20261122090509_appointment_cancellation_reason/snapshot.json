@@ -1,8 +1,8 @@
 {
    "version": "8",
    "dialect": "postgres",
-   "id": "409e9896-2530-46bb-a052-6de50cb1b6c4",
-   "prevIds": ["f0fc9898-e1ae-4509-805f-8521cf37c5d9"],
+   "id": "5e3d1331-8f9f-41db-a5e7-e40a3600a77c",
+   "prevIds": ["1ffad58d-5a84-4e07-b6bf-58cd4415b2cd"],
    "ddl": [
       {
          "isRlsEnabled": false,
@@ -467,7 +467,7 @@
       {
          "type": "integer",
          "typeSchema": null,
-         "notNull": true,
+         "notNull": false,
          "dimensions": 0,
          "default": null,
          "generated": null,
@@ -480,7 +480,7 @@
       {
          "type": "integer",
          "typeSchema": null,
-         "notNull": true,
+         "notNull": false,
          "dimensions": 0,
          "default": null,
          "generated": null,
@@ -2956,6 +2956,32 @@
          "generated": null,
          "identity": null,
          "name": "auth_version",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "users"
+      },
+      {
+         "type": "integer",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": "0",
+         "generated": null,
+         "identity": null,
+         "name": "failed_login_attempts",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "users"
+      },
+      {
+         "type": "timestamp with time zone",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "locked_until",
          "entityType": "columns",
          "schema": "public",
          "table": "users"
