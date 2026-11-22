@@ -741,9 +741,6 @@ export async function staffRescheduleAppointment(
             .limit(1);
 
          if (!appointment) return { error: 'not_found' };
-         // An APE Booking is an Arrival Window checked against Procedure capacity,
-         // not a timed slot (ADR 0002); staff cancel and rebook it instead.
-         if (appointment.apePackageId) return { error: 'ape_booking' };
 
          const providerId = newProviderId ?? appointment.providerId;
          const roomId = newRoomId ?? appointment.roomId;
@@ -770,7 +767,7 @@ export async function staffRescheduleAppointment(
             gte(appointments.scheduledEnd, scheduledStart),
          ];
 
-         // Provider conflict (an APE Booking has no Practitioner yet)
+         // Provider conflict (skipped when the appointment has no Practitioner)
          const [providerConflict] = providerId
             ? await tx
                  .select({ id: appointments.id })

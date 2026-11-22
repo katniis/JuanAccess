@@ -13,7 +13,6 @@ import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import ErrorState from './components/ErrorState.jsx';
 import PatientLayout from './layouts/PatientLayout.jsx';
 import BookAppointment from './pages/patient/BookAppointment.jsx';
-import BookApe from './pages/patient/BookApe.jsx';
 import PatientAppointments from './pages/patient/PatientAppointments.jsx';
 import PatientDashboard from './pages/patient/PatientDashboard.jsx';
 import PatientWaitlist from './pages/patient/PatientWaitlist.jsx';
@@ -31,7 +30,6 @@ import StaffPriorAuth from './pages/staff/StaffPriorAuth.jsx';
 import StaffPatientRecord from './pages/staff/StaffPatientRecord.jsx';
 import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
-import StaffApeQueue from './pages/staff/StaffApeQueue.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import PriceList from './pages/PriceList.jsx';
@@ -228,7 +226,6 @@ function App() {
                      <Route index element={<StaffDashboard />} />
                      <Route path="schedule" element={<StaffSchedule />} />
                      <Route path="slots" element={<StaffSlotManagement />} />
-                     <Route path="ape-queue" element={<StaffApeQueue />} />
                      <Route path="prior-auth" element={<StaffPriorAuth />} />
                      <Route path="appeals" element={<StaffAppeals />} />
                      <Route path="disputes" element={<StaffDisputes />} />
@@ -256,7 +253,6 @@ function App() {
                      }>
                      <Route index element={<PatientDashboard />} />
                      <Route path="book" element={<BookAppointment />} />
-                     <Route path="book-ape" element={<BookApe />} />
                      <Route path="waitlist" element={<PatientWaitlist />} />
                      <Route
                         path="appointments"

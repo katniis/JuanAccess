@@ -424,12 +424,6 @@ export const rescheduleAppointmentStaff = async (req, res) => {
          });
       }
 
-      if (result.error === 'ape_booking') {
-         return res.status(409).json({
-            error: 'An APE Booking cannot be rescheduled here. Cancel it and rebook the patient into another Arrival Window; Practitioners are assigned per Procedure through Station Assignment.',
-         });
-      }
-
       if (result.error === 'conflict') {
          return res.status(409).json({
             error: `Scheduling conflict: ${result.conflictType} is already booked at the requested time`,

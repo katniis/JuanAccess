@@ -5,41 +5,25 @@ A patient and clinic-staff portal covering a clinic visit end to end: booking, c
 ## Scheduling
 
 **Procedure**:
-A single billable test or service (e.g. CBC, chest X-ray, ECG, physical exam) with its own price and its own offered days and capacity.
+A single billable test or service (e.g. CBC, chest X-ray, ECG, physical exam) with its own price.
 _Avoid_: Test, service, exam (when meaning one item)
-
-**APE Package**:
-A named bundle of Procedures sold together as an Annual Physical Examination, with its own Package Price.
-_Avoid_: APE appointment, checkup bundle
-
-**Arrival Window**:
-The block of time on a chosen date (e.g. 7–10 AM) in which an APE patient arrives and moves through the Procedures in a station queue.
-_Avoid_: Slot (slots are timed and tied to one Practitioner)
 
 **Practitioner**:
 A clinic professional who performs Procedures or sees patients, identified by their Profession.
 _Avoid_: Provider, doctor (unless the Profession is physician)
 
 **Profession**:
-The kind of Practitioner — physician, nurse, medical technologist, radiologic technologist — which determines which Procedures they may perform.
+The kind of Practitioner — physician, nurse, medical technologist, radiologic technologist. Only physicians are booked for consults.
 _Avoid_: Role (role means portal access level), specialty (a physician's field)
 
 **Duty Schedule**:
 The weekly recurring hours a Practitioner works, adjusted by date-specific overrides for leave or swaps.
 _Avoid_: Availability, roster
 
-**Station Assignment**:
-The day-of choice, made by staff, of which on-duty Practitioner performs a Procedure for an APE patient.
-_Avoid_: Doctor assignment
-
-**APE Booking**:
-An Appointment for an APE Package on a date and Arrival Window, with no Practitioner, room, or timed slot until the day itself; it has no waitlist.
-_Avoid_: APE slot
-
 ## Patients
 
 **Sex at Birth**:
-The clinical sex (female or male) used to pick sex-specific Procedures and reference ranges.
+The clinical sex (female or male), a required clinical field recorded at registration.
 _Avoid_: Gender (that is the patient's self-described identity, recorded separately)
 
 ## Staff Access
@@ -77,16 +61,12 @@ The public list of Doctor Profiles patients can browse before booking.
 _Avoid_: Meet Our Doctors (UI label only)
 
 **Price List**:
-The public list of cash prices for every Procedure and APE Package, in PHP.
+The public list of cash prices for every Procedure and each physician's Consultation Fee, in PHP.
 _Avoid_: Fee schedule (the internal source table), rates
 
 **Consultation Fee**:
 A physician's own price for a regular consult, shown on their Doctor Profile and the Price List.
 _Avoid_: Professional fee, PF
-
-**Package Price**:
-The price of an APE Package as a whole, shown next to the itemized sum of its Procedures.
-_Avoid_: Bundle discount
 
 ## Privacy
 

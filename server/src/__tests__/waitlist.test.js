@@ -161,25 +161,6 @@ describe('waitlist routes', () => {
          });
       });
 
-      it('returns 400 for the APE visit type, which has no waitlist', async () => {
-         mockQueryQueue.push(
-            [patientUser],
-            [{ id: 1, name: 'Annual Physical Examination' }],
-         );
-
-         const res = await postJson(
-            ctx.baseUrl,
-            '/waitlist',
-            validBody,
-            authHeader(patientToken),
-         );
-
-         expect(res.status).toBe(400);
-         expect(await readJson(res)).toEqual({
-            error: 'Book an APE through APE booking',
-         });
-      });
-
       it('returns 404 when the provider does not exist', async () => {
          mockQueryQueue.push([patientUser], [{ id: 1 }], []);
 

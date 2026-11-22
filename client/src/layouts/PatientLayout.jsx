@@ -20,7 +20,6 @@ import {
 const navigation = [
    { label: 'Dashboard', path: '/patient', icon: 'grid', end: true },
    { label: 'Book Appointment', path: '/patient/book', icon: 'calendar' },
-   { label: 'Book an APE', path: '/patient/book-ape', icon: 'calendar' },
    { label: 'My Waitlist', path: '/patient/waitlist', icon: 'clock' },
    { label: 'My Appointments', path: '/patient/appointments', icon: 'folder' },
    { label: 'Upload a Bill', path: '/patient/bills', icon: 'upload' },

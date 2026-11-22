@@ -14,8 +14,6 @@ import { rooms } from './rooms.js';
 import { equipment } from './equipments.js';
 import { visitTypes } from './visitTypes.js';
 import { users } from './users.js';
-import { apePackages } from './apePackages.js';
-import { arrivalWindows } from './arrivalWindows.js';
 
 export const appointments = pgTable(
    'appointments',
@@ -26,7 +24,6 @@ export const appointments = pgTable(
          .notNull()
          .references(() => patients.id),
 
-      // Null for an APE Booking until Station Assignment on the day (ADR 0002).
       providerId: integer('provider_id').references(() => providers.id),
 
       roomId: integer('room_id').references(() => rooms.id),
@@ -66,13 +63,6 @@ export const appointments = pgTable(
       cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
 
       cancellationLetter: text('cancellation_letter'),
-
-      // Set only for an APE Booking (ADR 0002).
-      apePackageId: integer('ape_package_id').references(() => apePackages.id),
-
-      arrivalWindowId: integer('arrival_window_id').references(
-         () => arrivalWindows.id,
-      ),
 
       createdAt: timestamp('created_at', { withTimezone: true })
          .notNull()

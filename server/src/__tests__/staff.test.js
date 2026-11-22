@@ -361,7 +361,7 @@ describe('Staff Backend Routes & Controller', () => {
                   scheduledStart: '2026-10-04T09:00:00.000Z',
                   scheduledEnd: '2026-10-04T09:45:00.000Z',
                   status: 'scheduled',
-                  visitTypeName: 'Annual Physical Examination',
+                  visitTypeName: 'General Checkup',
                },
             ],
             [],
