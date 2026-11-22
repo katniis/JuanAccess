@@ -32,6 +32,7 @@ import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import PriceList from './pages/PriceList.jsx';
 import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
@@ -196,6 +197,7 @@ function App() {
                      }
                   />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route path="/prices" element={<PriceList />} />
                   <Route
                      path="/forgot-password"
                      element={<AccountRecoveryPage mode="forgot" />}

@@ -8112,6 +8112,29 @@ dialog::-webkit-scrollbar,
    margin-top: 28px;
    font-size: var(--type-heading-small);
 }
+.price-list-table {
+   width: 100%;
+   border-collapse: collapse;
+}
+.price-list-table th,
+.price-list-table td {
+   padding: 8px 0;
+   border-bottom: 1px solid #dbe5ef;
+   text-align: left;
+   font-weight: normal;
+}
+.price-list-table td {
+   text-align: right;
+   white-space: nowrap;
+}
+.price-list-table form {
+   display: inline-flex;
+   gap: 8px;
+   align-items: center;
+}
+.price-list-table input {
+   width: 7rem;
+}
 .privacy-policy-version {
    color: #58728e;
 }
