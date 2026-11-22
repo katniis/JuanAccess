@@ -494,14 +494,24 @@ const auditFor = (req, user) => (action, newValue) =>
    });
 
 // Wrong passwords and wrong Second Factor codes share one per-account lockout counter.
+// Incremented in SQL so concurrent failures cannot overwrite each other's count.
 async function recordFailedAttempt(user, audit, failAction, detail = {}) {
-   const attempts = (user.failedLoginAttempts ?? 0) + 1;
-   const lock = attempts >= maxFailedLogins;
-   const lockedUntil = lock ? new Date(Date.now() + lockoutMs) : null;
-   await db
+   const [row] = await db
       .update(users)
-      .set({ failedLoginAttempts: lock ? 0 : attempts, lockedUntil })
-      .where(eq(users.id, user.id));
+      .set({ failedLoginAttempts: sql`${users.failedLoginAttempts} + 1` })
+      .where(eq(users.id, user.id))
+      .returning({ attempts: users.failedLoginAttempts });
+   const attempts = row?.attempts ?? 0;
+   const lock = attempts >= maxFailedLogins;
+   if (lock) {
+      await db
+         .update(users)
+         .set({
+            failedLoginAttempts: 0,
+            lockedUntil: new Date(Date.now() + lockoutMs),
+         })
+         .where(eq(users.id, user.id));
+   }
    audit(lock ? 'login_lockout' : failAction, { attempts, ...detail });
 }
 

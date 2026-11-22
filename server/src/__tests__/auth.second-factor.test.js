@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { TOTP, Secret } from 'otpauth';
 import { jest } from '@jest/globals';
+import { SQL } from 'drizzle-orm';
 
 const mockRecordAudit = jest.fn();
 jest.unstable_mockModule('../services/audit.service.js', () => ({
@@ -159,7 +160,7 @@ describe('Staff Second Factor', () => {
       });
 
       it('rejects a wrong code and counts it toward lockout', async () => {
-         mockQueryQueue.push([{ ...staffRow, failedLoginAttempts: 1 }], []);
+         mockQueryQueue.push([staffRow], [{ attempts: 2 }]);
 
          const res = await postJson(
             ctx.baseUrl,
@@ -170,9 +171,9 @@ describe('Staff Second Factor', () => {
 
          expect(res.status).toBe(401);
          expect(getCookie(res, 'token')).toBeNull();
-         expect(mockMutationLog).toContainEqual({
-            set: { failedLoginAttempts: 2, lockedUntil: null },
-         });
+         const sets = mockMutationLog.filter((entry) => entry.set);
+         expect(sets).toHaveLength(1);
+         expect(sets[0].set.failedLoginAttempts).toBeInstanceOf(SQL);
          audited('second_factor_failed');
       });
 
@@ -190,7 +191,7 @@ describe('Staff Second Factor', () => {
       });
 
       it('locks the account on the fifth wrong code', async () => {
-         mockQueryQueue.push([{ ...staffRow, failedLoginAttempts: 4 }], []);
+         mockQueryQueue.push([staffRow], [{ attempts: 5 }], []);
 
          const res = await postJson(
             ctx.baseUrl,
@@ -200,8 +201,8 @@ describe('Staff Second Factor', () => {
          );
 
          expect(res.status).toBe(401);
-         const { set } = mockMutationLog.find((entry) => entry.set);
-         expect(set.lockedUntil.getTime()).toBeGreaterThan(Date.now());
+         const [, lock] = mockMutationLog.filter((entry) => entry.set);
+         expect(lock.set.lockedUntil.getTime()).toBeGreaterThan(Date.now());
          audited('login_lockout');
       });
 
@@ -354,9 +355,8 @@ describe('Staff Second Factor', () => {
 
          expect(res.status).toBe(401);
          expect(getCookie(res, 'token')).toBeNull();
-         expect(mockMutationLog).toContainEqual({
-            set: { failedLoginAttempts: 1, lockedUntil: null },
-         });
+         const [increment] = mockMutationLog.filter((entry) => entry.set);
+         expect(increment.set.failedLoginAttempts).toBeInstanceOf(SQL);
          audited('second_factor_failed');
       });
 

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { jest } from '@jest/globals';
+import { SQL } from 'drizzle-orm';
 
 const mockRecordAudit = jest.fn();
 jest.unstable_mockModule('../services/audit.service.js', () => ({
@@ -139,8 +140,13 @@ describe('POST /auth/login', () => {
       expect(jwt.decode(getCookie(res, 'token')).rememberMe).toBe(true);
    });
 
-   it('locks the account on the fifth failed attempt', async () => {
-      mockQueryQueue.push([{ ...userRow, failedLoginAttempts: 4 }], []);
+   it('locks the account when the atomic counter reaches the fifth failed attempt', async () => {
+      // The row read says 0; the database's incremented value decides.
+      mockQueryQueue.push(
+         [{ ...userRow, failedLoginAttempts: 0 }],
+         [{ attempts: 5 }],
+         [],
+      );
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'patient@example.com',
@@ -148,16 +154,20 @@ describe('POST /auth/login', () => {
       });
 
       expect(res.status).toBe(401);
-      const { set } = mockMutationLog.find((entry) => entry.set);
-      expect(set.failedLoginAttempts).toBe(0);
-      expect(set.lockedUntil.getTime()).toBeGreaterThan(Date.now());
+      const [increment, lock] = mockMutationLog.filter((entry) => entry.set);
+      expect(increment.set.failedLoginAttempts).toBeInstanceOf(SQL);
+      expect(lock.set.failedLoginAttempts).toBe(0);
+      expect(lock.set.lockedUntil.getTime()).toBeGreaterThan(Date.now());
       expect(mockRecordAudit).toHaveBeenCalledWith(
          expect.objectContaining({ entityId: 1, action: 'login_lockout' }),
       );
    });
 
    it('counts a failed attempt below the threshold without locking', async () => {
-      mockQueryQueue.push([{ ...userRow, failedLoginAttempts: 1 }], []);
+      mockQueryQueue.push(
+         [{ ...userRow, failedLoginAttempts: 0 }],
+         [{ attempts: 2 }],
+      );
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'patient@example.com',
@@ -165,11 +175,15 @@ describe('POST /auth/login', () => {
       });
 
       expect(res.status).toBe(401);
-      expect(mockMutationLog).toContainEqual({
-         set: { failedLoginAttempts: 2, lockedUntil: null },
-      });
+      const sets = mockMutationLog.filter((entry) => entry.set);
+      expect(sets).toHaveLength(1);
+      expect(sets[0].set.failedLoginAttempts).toBeInstanceOf(SQL);
       expect(mockRecordAudit).toHaveBeenCalledWith(
-         expect.objectContaining({ entityId: 1, action: 'login_failed' }),
+         expect.objectContaining({
+            entityId: 1,
+            action: 'login_failed',
+            newValue: expect.objectContaining({ attempts: 2 }),
+         }),
       );
    });
 
