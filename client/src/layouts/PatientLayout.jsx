@@ -7,6 +7,7 @@ import {
    useNavigate,
 } from 'react-router-dom';
 import Icon from '../components/Icon.jsx';
+import PrivacyConsentPrompt from '../components/PrivacyConsentPrompt.jsx';
 import { useAuth } from '../contexts/useAuth.js';
 import { PortalFeedbackProvider } from '../contexts/PortalFeedbackContext.jsx';
 import { formatClinicDateTime } from '../services/patientDates.js';
@@ -217,6 +218,7 @@ function PatientLayout() {
 
    return (
       <PortalFeedbackProvider>
+         <PrivacyConsentPrompt onSignOut={handleSignOut} />
          <div className="patient-app">
             <aside
                ref={sidebarRef}

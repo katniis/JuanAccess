@@ -7855,6 +7855,20 @@ dialog::-webkit-scrollbar,
 .staff-invite-form > .button {
    justify-self: start;
 }
+.staff-invite-form textarea {
+   width: 100%;
+   padding: 9px 11px;
+   border: 1px solid #dce5ee;
+   border-radius: 10px;
+   background: #fff;
+   color: #173652;
+   font: inherit;
+   font-size: var(--type-body);
+}
+.staff-practitioner-form-title {
+   grid-column: 1 / -1;
+   margin: 0;
+}
 .staff-access-invite > .prior-auth-inline-error {
    margin: 0 24px 20px;
 }
@@ -8059,4 +8073,28 @@ dialog::-webkit-scrollbar,
       flex-direction: column;
       padding: 16px 17px;
    }
+}
+.privacy-policy {
+   min-height: 100vh;
+   padding: 24px 16px 48px;
+   background: #f6f9fc;
+   color: #102d4c;
+}
+.privacy-policy article {
+   max-width: 720px;
+   margin: 24px auto 0;
+   line-height: 1.6;
+}
+.privacy-policy h2 {
+   margin-top: 28px;
+   font-size: var(--type-heading-small);
+}
+.privacy-policy-version {
+   color: #58728e;
+}
+.privacy-policy-draft {
+   padding: 12px 16px;
+   border: 1px solid #f2d39b;
+   border-radius: 12px;
+   background: #fff4df;
 }

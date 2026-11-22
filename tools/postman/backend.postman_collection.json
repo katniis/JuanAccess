@@ -73,7 +73,7 @@
                   "url": "{{base_url}}/auth/register",
                   "body": {
                      "mode": "raw",
-                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"{{patient_password}}\",\n   \"first_name\": \"Postman\",\n   \"last_name\": \"Patient\",\n   \"date_of_birth\": \"1990-01-01\",\n   \"gender\": \"female\",\n   \"contact_phone\": \"09170000000\",\n   \"intake_reason_note\": \"Synthetic test patient\"\n}",
+                     "raw": "{\n   \"email\": \"{{patient_email}}\",\n   \"password\": \"{{patient_password}}\",\n   \"first_name\": \"Postman\",\n   \"last_name\": \"Patient\",\n   \"date_of_birth\": \"1990-01-01\",\n   \"gender\": \"female\",\n   \"sex_at_birth\": \"female\",\n   \"contact_phone\": \"09170000000\",\n   \"intake_reason_note\": \"Synthetic test patient\"\n}",
                      "options": {
                         "raw": {
                            "language": "json"

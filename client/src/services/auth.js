@@ -36,6 +36,10 @@ export function getCurrentUser() {
    return authRequest('me');
 }
 
+export function acceptPrivacyPolicy() {
+   return authRequest('consent', {});
+}
+
 export function signIn(credentials) {
    return authRequest('login', credentials);
 }

@@ -10,6 +10,8 @@ export const mockQueryQueue = [];
 export const mockSendEmail = jest.fn().mockResolvedValue({ id: 'email-test' });
 export const mockMutationLog = [];
 export const mockResendConfig = { configured: false };
+// Column keys of each db.select({...}) call, in order.
+export const mockSelectLog = [];
 
 jest.unstable_mockModule(
    '../services/email.service.js',
@@ -65,8 +67,13 @@ jest.unstable_mockModule('../db/index.js', () => {
       return node;
    };
 
+   const select = (fields) => {
+      mockSelectLog.push(Object.keys(fields ?? {}));
+      return make(take());
+   };
+
    const tx = {
-      select: () => make(take()),
+      select,
       insert: () => make(take()),
       update: () => make(take()),
       delete: () => make(take()),
@@ -74,7 +81,7 @@ jest.unstable_mockModule('../db/index.js', () => {
 
    return {
       db: {
-         select: () => make(take()),
+         select,
          insert: () => make(take()),
          update: () => make(take()),
          delete: () => make(take()),
@@ -119,6 +126,7 @@ export const getCookie = (res, name) => {
 export const resetMocks = () => {
    mockQueryQueue.length = 0;
    mockMutationLog.length = 0;
+   mockSelectLog.length = 0;
    mockResendConfig.configured = false;
    mockSendEmail.mockReset().mockResolvedValue({ id: 'email-test' });
 };
