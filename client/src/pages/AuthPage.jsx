@@ -65,6 +65,7 @@ function AuthPage({ mode = 'signin' }) {
    const [password, setPassword] = useState('');
    const [confirmPassword, setConfirmPassword] = useState('');
    const [rememberMe, setRememberMe] = useState(false);
+   const [privacyConsent, setPrivacyConsent] = useState(false);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
    const emailUnavailableDialogRef = useRef(null);
@@ -146,6 +147,7 @@ function AuthPage({ mode = 'signin' }) {
                last_name: lastName,
                date_of_birth: dateOfBirth,
                ...optionalDetails,
+               privacy_consent: privacyConsent,
             });
          } else if (isInvitation) {
             user = await acceptStaffInvitation({
@@ -504,6 +506,23 @@ function AuthPage({ mode = 'signin' }) {
                               </div>
                            </div>
                         </div>
+                        <label className="settings-checkbox">
+                           <input
+                              type="checkbox"
+                              checked={privacyConsent}
+                              onChange={(event) =>
+                                 setPrivacyConsent(event.target.checked)
+                              }
+                              required
+                           />
+                           <span>
+                              I have read and agree to the{' '}
+                              <Link to="/privacy" target="_blank">
+                                 Privacy Policy
+                              </Link>
+                              .
+                           </span>
+                        </label>
                      </>
                   )}
 
