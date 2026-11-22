@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/useAuth.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
 
 // Keep in sync with PRIVACY_POLICY_VERSION in server/src/utils/privacyPolicy.js.
-export const PRIVACY_POLICY_VERSION = '2026-11-22-draft';
+export const PRIVACY_POLICY_VERSION = '2026-11-22';
 
 // Approved policy wording: present it differently, never edit it here.
 const SECTIONS = [
@@ -127,9 +127,9 @@ const SECTIONS = [
       title: 'Contact',
       body: (
          <p>
-            To exercise your rights or ask a question, contact the clinic’s Data
-            Protection Officer at the clinic front desk. You may also file a
-            complaint with the National Privacy Commission.
+            To exercise your rights or ask a question, contact the clinic at the
+            front desk. You may also file a complaint with the National Privacy
+            Commission.
          </p>
       ),
    },
@@ -224,12 +224,6 @@ function PrivacyPolicy() {
                <p className="privacy-policy-version">
                   Version {PRIVACY_POLICY_VERSION}
                </p>
-               <p className="privacy-policy-draft" role="note">
-                  <strong>Draft for review.</strong> This text has not yet been
-                  reviewed or approved by the clinic’s Data Protection Officer
-                  (DPO). It may change before it takes effect.
-               </p>
-
                <p>
                   JuanAccess is the clinic’s patient and staff portal. This
                   policy explains how we handle your personal and sensitive
@@ -265,8 +259,8 @@ function PrivacyPolicy() {
                      </li>
                      <li>We do not sell your information.</li>
                      <li>
-                        You have rights under RA 10173. Ask the clinic’s Data
-                        Protection Officer at the front desk.
+                        You have rights under RA 10173. Ask the clinic at the
+                        front desk.
                      </li>
                   </ul>
                </section>
