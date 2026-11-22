@@ -337,4 +337,33 @@ describe('Station Assignment', () => {
       expect((await readJson(res)).error).toMatch(/APE Booking/);
       expect(mockMutationLog).toHaveLength(0);
    });
+
+   it('refuses a time-only staff reschedule of an APE Booking: cancel and rebook instead', async () => {
+      mockQueryQueue.push(
+         [staff],
+         [
+            {
+               id: 10,
+               apePackageId: 2,
+               providerId: null,
+               roomId: null,
+               equipmentId: null,
+               status: 'scheduled',
+            },
+         ],
+      );
+      const res = await send(
+         staff,
+         'PATCH',
+         '/staff/appointments/10/reschedule',
+         {
+            new_start: '2026-12-02T00:00:00.000Z',
+            new_end: '2026-12-02T03:00:00.000Z',
+         },
+      );
+
+      expect(res.status).toBe(409);
+      expect((await readJson(res)).error).toMatch(/cancel.*rebook/i);
+      expect(mockMutationLog).toHaveLength(0);
+   });
 });

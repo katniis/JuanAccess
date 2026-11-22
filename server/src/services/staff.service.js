@@ -741,13 +741,9 @@ export async function staffRescheduleAppointment(
             .limit(1);
 
          if (!appointment) return { error: 'not_found' };
-         // APE Bookings get Practitioners per Procedure via Station Assignment (ADR 0002).
-         if (
-            appointment.apePackageId &&
-            (newProviderId || newRoomId || newEquipmentId)
-         ) {
-            return { error: 'ape_booking' };
-         }
+         // An APE Booking is an Arrival Window checked against Procedure capacity,
+         // not a timed slot (ADR 0002); staff cancel and rebook it instead.
+         if (appointment.apePackageId) return { error: 'ape_booking' };
 
          const providerId = newProviderId ?? appointment.providerId;
          const roomId = newRoomId ?? appointment.roomId;

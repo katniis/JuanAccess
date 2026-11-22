@@ -426,7 +426,7 @@ export const rescheduleAppointmentStaff = async (req, res) => {
 
       if (result.error === 'ape_booking') {
          return res.status(409).json({
-            error: 'An APE Booking has no Practitioner, room, or equipment; assign Practitioners per Procedure through Station Assignment.',
+            error: 'An APE Booking cannot be rescheduled here. Cancel it and rebook the patient into another Arrival Window; Practitioners are assigned per Procedure through Station Assignment.',
          });
       }
 
