@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { recordAudit } from '../services/audit.service.js';
 import {
@@ -7,6 +7,7 @@ import {
    sendEmail,
 } from '../services/email.service.js';
 import {
+   arrivalWindows,
    dutyScheduleOverrides,
    equipment,
    feeSchedule,
@@ -64,11 +65,28 @@ const resources = {
    },
    'fee-schedule': {
       table: feeSchedule,
-      fields: ['procedureCode', 'description', 'standardCost'],
-      // Procedure price in PHP, whole centavos only.
-      isValid: ({ standardCost }) =>
-         standardCost === undefined ||
-         /^\d{1,8}(\.\d{1,2})?$/.test(String(standardCost)),
+      fields: [
+         'procedureCode',
+         'description',
+         'standardCost',
+         'offeredDays',
+         'capacityPerWindow',
+      ],
+      // Procedure price in PHP, whole centavos only; offered days are distinct
+      // 0 (Sunday) … 6 (Saturday); capacity per Arrival Window is a whole number ≥ 0.
+      isValid: ({ standardCost, offeredDays, capacityPerWindow }) =>
+         (standardCost === undefined ||
+            /^\d{1,8}(\.\d{1,2})?$/.test(String(standardCost))) &&
+         (offeredDays === undefined ||
+            (Array.isArray(offeredDays) &&
+               new Set(offeredDays).size === offeredDays.length &&
+               offeredDays.every(
+                  (day) => Number.isInteger(day) && day >= 0 && day <= 6,
+               ))) &&
+         (capacityPerWindow === undefined ||
+            (Number.isInteger(capacityPerWindow) &&
+               capacityPerWindow >= 0 &&
+               capacityPerWindow <= 100000)),
    },
 };
 
@@ -432,6 +450,138 @@ export async function uploadAdminPractitionerPhoto(req, res) {
    } catch (error) {
       console.error('Failed to upload practitioner photo:', error);
       return res.status(500).json({ error: 'Failed to upload photo' });
+   }
+}
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+// Postgres returns time as HH:MM:SS; pad HH:MM so strings compare in order.
+const fullTime = (value) => (value.length === 5 ? `${value}:00` : value);
+
+// Returns { values } or { error } for an Arrival Window create/update body.
+function arrivalWindowValues(body, { creating }) {
+   const values = {};
+   if (body?.name !== undefined || creating) {
+      values.name = clean(body?.name, 100);
+      if (!values.name) return { error: 'name is required' };
+   }
+   for (const field of ['startTime', 'endTime']) {
+      if (body?.[field] === undefined && !creating) continue;
+      if (!TIME_PATTERN.test(body?.[field] ?? ''))
+         return { error: `${field} must be a time like 07:00` };
+      values[field] = body[field];
+   }
+   if (body?.isActive !== undefined) values.isActive = Boolean(body.isActive);
+   return { values };
+}
+
+// Returns an error message when the window is invalid or overlaps another active one.
+async function arrivalWindowConflict(window, id) {
+   if (fullTime(window.startTime) >= fullTime(window.endTime))
+      return { status: 400, error: 'endTime must be after startTime' };
+   if (window.isActive === false) return null;
+   const others = await db
+      .select()
+      .from(arrivalWindows)
+      .where(
+         id
+            ? and(eq(arrivalWindows.isActive, true), ne(arrivalWindows.id, id))
+            : eq(arrivalWindows.isActive, true),
+      );
+   const clash = others.find(
+      (other) =>
+         fullTime(window.startTime) < fullTime(other.endTime) &&
+         fullTime(other.startTime) < fullTime(window.endTime),
+   );
+   return clash
+      ? { status: 409, error: `Overlaps the ${clash.name} Arrival Window` }
+      : null;
+}
+
+export async function listAdminArrivalWindows(_req, res) {
+   try {
+      return res.json({
+         arrivalWindows: await db
+            .select()
+            .from(arrivalWindows)
+            .orderBy(asc(arrivalWindows.startTime)),
+      });
+   } catch (error) {
+      console.error('Failed to list arrival windows:', error);
+      return res.status(500).json({ error: 'Failed to list arrival windows' });
+   }
+}
+
+export async function createAdminArrivalWindow(req, res) {
+   const { values, error } = arrivalWindowValues(req.body, { creating: true });
+   if (error) return res.status(400).json({ error });
+   try {
+      const conflict = await arrivalWindowConflict(values);
+      if (conflict)
+         return res.status(conflict.status).json({ error: conflict.error });
+      const [created] = await db
+         .insert(arrivalWindows)
+         .values(values)
+         .returning();
+      return res.status(201).json(created);
+   } catch (err) {
+      console.error('Failed to create arrival window:', err);
+      return res.status(500).json({ error: 'Failed to create arrival window' });
+   }
+}
+
+export async function updateAdminArrivalWindow(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid Arrival Window ID' });
+   const { values: updates, error } = arrivalWindowValues(req.body, {
+      creating: false,
+   });
+   if (error) return res.status(400).json({ error });
+   if (!Object.keys(updates).length)
+      return res.status(400).json({ error: 'No supported updates supplied' });
+   try {
+      const [stored] = await db
+         .select()
+         .from(arrivalWindows)
+         .where(eq(arrivalWindows.id, id))
+         .limit(1);
+      if (!stored)
+         return res.status(404).json({ error: 'Arrival Window not found' });
+      const conflict = await arrivalWindowConflict(
+         { ...stored, ...updates },
+         id,
+      );
+      if (conflict)
+         return res.status(conflict.status).json({ error: conflict.error });
+      const [updated] = await db
+         .update(arrivalWindows)
+         .set(updates)
+         .where(eq(arrivalWindows.id, id))
+         .returning();
+      return res.json(updated);
+   } catch (err) {
+      console.error('Failed to update arrival window:', err);
+      return res.status(500).json({ error: 'Failed to update arrival window' });
+   }
+}
+
+export async function deleteAdminArrivalWindow(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid Arrival Window ID' });
+   try {
+      const [deleted] = await db
+         .delete(arrivalWindows)
+         .where(eq(arrivalWindows.id, id))
+         .returning();
+      return deleted
+         ? res.json({ deleted: true })
+         : res.status(404).json({ error: 'Arrival Window not found' });
+   } catch (error) {
+      console.error('Failed to delete arrival window:', error);
+      return res
+         .status(409)
+         .json({ error: 'Arrival Window is still in use; deactivate it' });
    }
 }
 

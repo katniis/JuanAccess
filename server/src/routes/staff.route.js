@@ -52,6 +52,10 @@ import {
    updateAdminPractitioner,
    uploadAdminPractitionerPhoto,
    updateAdminUser,
+   createAdminArrivalWindow,
+   deleteAdminArrivalWindow,
+   listAdminArrivalWindows,
+   updateAdminArrivalWindow,
 } from '../controller/admin.controller.js';
 
 const router = express.Router();
@@ -150,6 +154,26 @@ router.post(
    requireStaffAdmin,
    parsePhotoUpload,
    uploadAdminPractitionerPhoto,
+);
+router.get(
+   '/admin/arrival-windows',
+   requireStaffAdmin,
+   listAdminArrivalWindows,
+);
+router.post(
+   '/admin/arrival-windows',
+   requireStaffAdmin,
+   createAdminArrivalWindow,
+);
+router.patch(
+   '/admin/arrival-windows/:id',
+   requireStaffAdmin,
+   updateAdminArrivalWindow,
+);
+router.delete(
+   '/admin/arrival-windows/:id',
+   requireStaffAdmin,
+   deleteAdminArrivalWindow,
 );
 router.get('/admin/reference-data', requireStaffAdmin, listAdminReferenceData);
 router.post(
