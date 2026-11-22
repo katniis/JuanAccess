@@ -4,8 +4,10 @@ import {
    getCookie,
    resetMocks,
    mockQueryQueue,
+   mockMutationLog,
    postJson,
 } from './helpers.js';
+import { PRIVACY_POLICY_VERSION } from '../utils/privacyPolicy.js';
 
 const validBody = {
    email: 'new@example.com',
@@ -14,8 +16,10 @@ const validBody = {
    last_name: 'Patient',
    date_of_birth: '1990-01-01',
    gender: 'female',
+   sex_at_birth: 'female',
    contact_phone: '555-0100',
    address: '123 Main St',
+   privacy_consent: true,
 };
 
 const createdUser = {
@@ -122,6 +126,39 @@ describe('POST /auth/register', () => {
       },
    );
 
+   it.each([
+      ['missing gender', { gender: undefined }],
+      ['invalid gender', { gender: 'unknown' }],
+      ['missing Sex at Birth', { sex_at_birth: undefined }],
+      ['invalid Sex at Birth', { sex_at_birth: 'prefer_not_to_say' }],
+   ])('returns 400 for %s', async (_label, override) => {
+      const res = await postJson(ctx.baseUrl, '/auth/register', {
+         ...validBody,
+         ...override,
+      });
+
+      expect(res.status).toBe(400);
+      expect(await readJson(res)).toEqual({
+         message: 'Gender and Sex at Birth are required.',
+      });
+   });
+
+   it('accepts "Prefer not to say" as gender and stores Sex at Birth', async () => {
+      mockQueryQueue.push([], [{ id: 101 }], [createdUser], []);
+
+      const res = await postJson(ctx.baseUrl, '/auth/register', {
+         ...validBody,
+         gender: 'prefer_not_to_say',
+         sex_at_birth: 'male',
+      });
+
+      expect(res.status).toBe(201);
+      expect(mockMutationLog[0].values).toMatchObject({
+         gender: 'prefer_not_to_say',
+         sexAtBirth: 'male',
+      });
+   });
+
    it('returns 400 when the body is empty', async () => {
       const res = await fetch(`${ctx.baseUrl}/auth/register`, {
          method: 'POST',
@@ -132,6 +169,21 @@ describe('POST /auth/register', () => {
          message: 'Missing required fields.',
       });
    });
+
+   it.each([undefined, false, 'yes'])(
+      'returns 400 when privacy_consent is %p',
+      async (privacy_consent) => {
+         const res = await postJson(ctx.baseUrl, '/auth/register', {
+            ...validBody,
+            privacy_consent,
+         });
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            message: 'You must accept the Privacy Policy to register.',
+         });
+      },
+   );
 
    it('returns 409 when the email is already registered', async () => {
       mockQueryQueue.push([{ id: 9, email: 'new@example.com' }]);
@@ -145,7 +197,7 @@ describe('POST /auth/register', () => {
    });
 
    it('returns 201 with the created user and patient and sets a token cookie', async () => {
-      mockQueryQueue.push([], [{ id: 101 }], [createdUser]);
+      mockQueryQueue.push([], [{ id: 101 }], [createdUser], []);
 
       const res = await postJson(ctx.baseUrl, '/auth/register', validBody);
 
@@ -155,5 +207,16 @@ describe('POST /auth/register', () => {
       expect(body.user).toEqual(createdUser);
       expect(body.patient).toEqual({ id: 101 });
       expect(getCookie(res, 'token')).toBeTruthy();
+   });
+
+   it('stores a Consent Record for the current policy version', async () => {
+      mockQueryQueue.push([], [{ id: 101 }], [createdUser], []);
+
+      const res = await postJson(ctx.baseUrl, '/auth/register', validBody);
+
+      expect(res.status).toBe(201);
+      expect(mockMutationLog).toContainEqual({
+         values: { userId: 1, policyVersion: PRIVACY_POLICY_VERSION },
+      });
    });
 });

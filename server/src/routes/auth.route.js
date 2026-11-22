@@ -12,6 +12,8 @@ import {
    resetPassword,
    requestEmailChange,
    confirmEmailChange,
+   getMe,
+   acceptPrivacyPolicy,
 } from '../controller/auth.controller.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 
@@ -55,8 +57,7 @@ router.post('/email-change/request', verifyToken, requestEmailChange);
 router.post('/logout', logout);
 
 //me
-router.get('/me', verifyToken, (req, res) => {
-   res.json({ user: req.user });
-});
+router.get('/me', verifyToken, getMe);
+router.post('/consent', verifyToken, acceptPrivacyPolicy);
 
 export default router;

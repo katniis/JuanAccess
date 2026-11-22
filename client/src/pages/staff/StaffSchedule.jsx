@@ -15,6 +15,7 @@ import {
    getStaffProviders,
 } from '../../services/staffSchedule.js';
 import { gsap, useGSAP } from '../../utils/portalGsap.js';
+import { genderLabel } from '../../utils/patientSex.js';
 
 function todayInManila() {
    const parts = new Intl.DateTimeFormat('en-CA', {
@@ -153,6 +154,10 @@ function AppointmentDrawer({
             </header>
             <div className="staff-detail-body">
                <dl className="staff-detail-grid">
+                  <div>
+                     <dt>Gender</dt>
+                     <dd>{genderLabel(appointment.patientGender)}</dd>
+                  </div>
                   <div>
                      <dt>Visit type</dt>
                      <dd>{appointment.visitTypeName}</dd>
@@ -584,7 +589,10 @@ function StaffSchedule() {
                                  appointment.patientLastName,
                               )}
                            </strong>
-                           <span>{appointment.visitTypeName}</span>
+                           <span>
+                              {appointment.visitTypeName} ·{' '}
+                              {genderLabel(appointment.patientGender)}
+                           </span>
                         </span>
                         <span
                            className={`schedule-checkin ${appointment.status === 'completed' ? 'complete' : 'pending'}`}>
