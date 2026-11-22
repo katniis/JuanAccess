@@ -64,6 +64,10 @@ const resources = {
    'fee-schedule': {
       table: feeSchedule,
       fields: ['procedureCode', 'description', 'standardCost'],
+      // Procedure price in PHP, whole centavos only.
+      isValid: ({ standardCost }) =>
+         standardCost === undefined ||
+         /^\d{1,8}(\.\d{1,2})?$/.test(String(standardCost)),
    },
 };
 
@@ -74,6 +78,7 @@ function resourceValues(resource, body) {
    for (const field of definition.fields) {
       if (body?.[field] !== undefined) values[field] = body[field];
    }
+   if (definition.isValid && !definition.isValid(values)) return null;
    return values;
 }
 

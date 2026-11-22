@@ -11,6 +11,11 @@ import {
 } from '../../services/appointmentBooking.js';
 import { getMyPriorAuthorizationStatuses } from '../../services/patientAppointments.js';
 import { formatClinicDateTime } from '../../services/patientDates.js';
+import {
+   formatPeso,
+   getPriceList,
+   HMO_NOTE,
+} from '../../services/priceList.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 
 const weekdayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -57,6 +62,8 @@ function BookAppointment() {
    const [bookingResult, setBookingResult] = useState(null);
    const [bookingStage, setBookingStage] = useState(0);
    const [authDraftStatus, setAuthDraftStatus] = useState(null);
+   // Consultation Fee by provider id, from the public Price List.
+   const [consultationFees, setConsultationFees] = useState({});
    const pageRef = useRef(null);
    const filteredVisitTypes = visitTypes.filter((visitType) =>
       visitType.name
@@ -78,6 +85,18 @@ function BookAppointment() {
          })
          .finally(() => {
             if (current) setLoading(false);
+         });
+      getPriceList()
+         .then(({ consultationFees: fees }) => {
+            if (current)
+               setConsultationFees(
+                  Object.fromEntries(
+                     fees.map((fee) => [fee.id, fee.consultationFee]),
+                  ),
+               );
+         })
+         .catch(() => {
+            // Prices are informational; booking still works without them.
          });
 
       return () => {
@@ -475,6 +494,10 @@ function BookAppointment() {
                <header className="available-heading">
                   <h2>Available Appointments</h2>
                   <p>Select a slot to confirm your booking.</p>
+                  <p>
+                     Prices shown are each doctor’s Consultation Fee. {HMO_NOTE}{' '}
+                     <Link to="/prices">See the full Price List</Link>
+                  </p>
                </header>
 
                {isBooking && (
@@ -532,6 +555,13 @@ function BookAppointment() {
                               <span className="slot-time">
                                  {slot.timeLabel}
                               </span>
+                              {consultationFees[slot.providerId] && (
+                                 <span>
+                                    {formatPeso(
+                                       consultationFees[slot.providerId],
+                                    )}
+                                 </span>
+                              )}
                            </div>
                            <button
                               className="button button-primary slot-select"
