@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+import { PHOTO_MAX_BYTES } from '../services/practitioner-photo.service.js';
 import {
    cancelAppointmentStaff,
    createAppeal,
@@ -42,11 +44,31 @@ import {
    listAdminReferenceData,
    listAdminUsers,
    updateAdminReference,
-   updateAdminProvider,
+   createAdminPractitioner,
+   listAdminPractitioners,
+   updateAdminPractitioner,
+   uploadAdminPractitionerPhoto,
    updateAdminUser,
 } from '../controller/admin.controller.js';
 
 const router = express.Router();
+const photoUpload = multer({
+   storage: multer.memoryStorage(),
+   limits: { fileSize: PHOTO_MAX_BYTES },
+});
+
+function parsePhotoUpload(req, res, next) {
+   photoUpload.single('file')(req, res, (error) => {
+      if (!error) return next();
+      if (
+         error instanceof multer.MulterError &&
+         error.code === 'LIMIT_FILE_SIZE'
+      ) {
+         return res.status(413).json({ error: 'Photo is too large' });
+      }
+      return res.status(400).json({ error: 'Invalid photo upload' });
+   });
+}
 
 // All staff routes require an authenticated user with staff or staff_admin role
 router.use(verifyToken);
@@ -99,7 +121,19 @@ router.post('/guidelines', requireStaffAdmin, createGuideline);
 router.get('/admin/users', requireStaffAdmin, listAdminUsers);
 router.patch('/admin/users/:id', requireStaffAdmin, updateAdminUser);
 router.post('/admin/invitations', requireStaffAdmin, createStaffInvitation);
-router.patch('/admin/providers/:id', requireStaffAdmin, updateAdminProvider);
+router.get('/admin/practitioners', requireStaffAdmin, listAdminPractitioners);
+router.post('/admin/practitioners', requireStaffAdmin, createAdminPractitioner);
+router.patch(
+   '/admin/practitioners/:id',
+   requireStaffAdmin,
+   updateAdminPractitioner,
+);
+router.post(
+   '/admin/practitioners/:id/photo',
+   requireStaffAdmin,
+   parsePhotoUpload,
+   uploadAdminPractitionerPhoto,
+);
 router.get('/admin/reference-data', requireStaffAdmin, listAdminReferenceData);
 router.post(
    '/admin/reference/:resource',
