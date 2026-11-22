@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import {
    mockQueryQueue,
+   mockSelectLog,
    readJson,
    resetMocks,
    startServer,
@@ -107,6 +108,9 @@ describe('Staff Backend Routes & Controller', () => {
          expect(body.snapshot.pendingAppealsCount).toBe(1);
          expect(body.snapshot.openWaitlistSlotsCount).toBe(3);
          expect(body.todayAppointments).toHaveLength(1);
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
       });
    });
 
@@ -160,6 +164,9 @@ describe('Staff Backend Routes & Controller', () => {
          const body = await readJson(res);
          expect(body.schedule).toHaveLength(1);
          expect(body.schedule[0].visitTypeName).toBe('Follow-up');
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
       });
    });
 
@@ -207,6 +214,9 @@ describe('Staff Backend Routes & Controller', () => {
             'New patient — no prior chart history available',
          );
          expect(body.fallbackSummary).toContain('Knee pain after running');
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
       });
 
       it('fetches pre-visit clinical data with raw medical records for established patient', async () => {

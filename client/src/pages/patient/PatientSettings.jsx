@@ -13,6 +13,7 @@ import {
    getAccountSettings,
    saveAccountSettings,
 } from '../../services/auth.js';
+import { genderOptions, sexAtBirthOptions } from '../../utils/patientSex.js';
 
 const emptyCoverage = {
    insurer_name: '',
@@ -63,7 +64,12 @@ function PatientSettings() {
       try {
          const updates = Object.fromEntries(
             Object.entries(profile)
-               .filter(([field]) => field !== 'dateOfBirth')
+               // Blank gender/Sex at Birth stay unrecorded rather than failing validation.
+               .filter(
+                  ([field, value]) =>
+                     field !== 'dateOfBirth' &&
+                     !(['gender', 'sexAtBirth'].includes(field) && !value),
+               )
                .map(([field, value]) => [field, value ?? '']),
          );
          const { settings: updated } = await saveAccountSettings(updates);
@@ -155,6 +161,12 @@ function PatientSettings() {
                   <p>Your date of birth is read-only.</p>
                </div>
             </header>
+            {(!settings.profile?.gender || !settings.profile?.sexAtBirth) && (
+               <p className="account-settings-message" role="status">
+                  Please add your gender and Sex at Birth so the clinic can
+                  prepare for your visits.
+               </p>
+            )}
             <form className="account-settings-form" onSubmit={saveProfile}>
                <div className="auth-name-fields">
                   <label className="auth-field">
@@ -207,14 +219,32 @@ function PatientSettings() {
                               gender: event.target.value,
                            })
                         }>
-                        <option value="">Not specified</option>
-                        <option value="female">Female</option>
-                        <option value="male">Male</option>
-                        <option value="nonbinary">Non-binary</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not_to_say">
-                           Prefer not to say
-                        </option>
+                        <option value="">Not recorded</option>
+                        {genderOptions.map(([value, label]) => (
+                           <option value={value} key={value}>
+                              {label}
+                           </option>
+                        ))}
+                     </select>
+                  </label>
+               </div>
+               <div className="auth-name-fields">
+                  <label className="auth-field">
+                     Sex at Birth
+                     <select
+                        value={profile.sexAtBirth || ''}
+                        onChange={(event) =>
+                           setProfile({
+                              ...profile,
+                              sexAtBirth: event.target.value,
+                           })
+                        }>
+                        <option value="">Not recorded</option>
+                        {sexAtBirthOptions.map(([value, label]) => (
+                           <option value={value} key={value}>
+                              {label}
+                           </option>
+                        ))}
                      </select>
                   </label>
                </div>

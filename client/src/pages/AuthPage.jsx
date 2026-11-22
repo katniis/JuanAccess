@@ -11,6 +11,7 @@ import {
    EMAIL_UNAVAILABLE_MESSAGE,
 } from '../utils/emailFeatures.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
+import { genderOptions, sexAtBirthOptions } from '../utils/patientSex.js';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {
    const [visible, setVisible] = useState(false);
@@ -53,6 +54,7 @@ function AuthPage({ mode = 'signin' }) {
    const [signupStep, setSignupStep] = useState(1);
    const [registration, setRegistration] = useState({
       gender: '',
+      sex_at_birth: '',
       contact_phone: '',
       address: '',
       insurer_name: '',
@@ -185,7 +187,7 @@ function AuthPage({ mode = 'signin' }) {
    const subtitle = isSignup
       ? [
            'Set up your patient account.',
-           'Add a few optional details to your profile.',
+           'Tell us a little more about you.',
            'Add insurance now or leave it for later.',
         ][signupStep - 1]
       : isInvitation
@@ -337,28 +339,40 @@ function AuthPage({ mode = 'signin' }) {
                      <>
                         <div className="auth-name-fields">
                            <div className="auth-field">
-                              <label htmlFor="gender">
-                                 Gender{' '}
-                                 <span className="auth-optional-label">
-                                    Optional
-                                 </span>
-                              </label>
+                              <label htmlFor="gender">Gender</label>
                               <select
                                  id="gender"
                                  name="gender"
                                  autoComplete="sex"
                                  value={registration.gender}
-                                 onChange={updateRegistration('gender')}>
+                                 onChange={updateRegistration('gender')}
+                                 required>
                                  <option value="">Select</option>
-                                 <option value="female">Female</option>
-                                 <option value="male">Male</option>
-                                 <option value="nonbinary">Non-binary</option>
-                                 <option value="other">Other</option>
-                                 <option value="prefer_not_to_say">
-                                    Prefer not to say
-                                 </option>
+                                 {genderOptions.map(([value, label]) => (
+                                    <option value={value} key={value}>
+                                       {label}
+                                    </option>
+                                 ))}
                               </select>
                            </div>
+                           <div className="auth-field">
+                              <label htmlFor="sex-at-birth">Sex at Birth</label>
+                              <select
+                                 id="sex-at-birth"
+                                 name="sex_at_birth"
+                                 value={registration.sex_at_birth}
+                                 onChange={updateRegistration('sex_at_birth')}
+                                 required>
+                                 <option value="">Select</option>
+                                 {sexAtBirthOptions.map(([value, label]) => (
+                                    <option value={value} key={value}>
+                                       {label}
+                                    </option>
+                                 ))}
+                              </select>
+                           </div>
+                        </div>
+                        <div className="auth-name-fields">
                            <div className="auth-field">
                               <label htmlFor="contact-phone">
                                  Phone number{' '}

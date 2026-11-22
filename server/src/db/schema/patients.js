@@ -25,6 +25,12 @@ export const patients = pgTable('patients', {
       length: 20,
    }),
 
+   // Required at registration; NULL allowed for patients registered earlier.
+   sexAtBirth: varchar('sex_at_birth', {
+      length: 10,
+      enum: ['female', 'male'],
+   }),
+
    contactEmail: varchar('contact_email', {
       length: 255,
    }),

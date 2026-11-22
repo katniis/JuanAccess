@@ -1,3 +1,5 @@
+import { genderLabel } from './patientSex.js';
+
 const formatTime = (value) =>
    value
       ? new Intl.DateTimeFormat('en-US', {
@@ -87,7 +89,7 @@ export function buildAttentionItems(
          id: `appointment-${appointment.id}`,
          icon: 'calendar',
          title: `Appointment check-in pending: ${appointment.visitTypeName}`,
-         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} · Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}`,
+         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} (${genderLabel(appointment.patientGender)}) · Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}`,
          status: 'Pending',
          tone: 'pending',
          sort: new Date(appointment.scheduledStart).getTime(),
