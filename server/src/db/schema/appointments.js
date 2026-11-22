@@ -3,6 +3,7 @@ import {
    pgTable,
    serial,
    check,
+   text,
    timestamp,
    varchar,
 } from 'drizzle-orm/pg-core';
@@ -12,6 +13,7 @@ import { providers } from './providers.js';
 import { rooms } from './rooms.js';
 import { equipment } from './equipments.js';
 import { visitTypes } from './visitTypes.js';
+import { users } from './users.js';
 
 export const appointments = pgTable(
    'appointments',
@@ -53,6 +55,18 @@ export const appointments = pgTable(
       insuranceStatus: varchar('insurance_status', { length: 20 })
          .notNull()
          .default('unverified'),
+
+      cancellationReason: varchar('cancellation_reason', { length: 40 }),
+
+      cancellationReasonText: text('cancellation_reason_text'),
+
+      cancelledByUserId: integer('cancelled_by_user_id').references(
+         () => users.id,
+      ),
+
+      cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+
+      cancellationLetter: text('cancellation_letter'),
 
       createdAt: timestamp('created_at', { withTimezone: true })
          .notNull()

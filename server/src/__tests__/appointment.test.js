@@ -4,6 +4,7 @@ import {
    readJson,
    resetMocks,
    mockQueryQueue,
+   mockMutationLog,
    postJson,
 } from './helpers.js';
 
@@ -45,6 +46,18 @@ const futureDay = () => {
    day.setHours(0, 0, 0, 0);
    return day;
 };
+
+const validReason = { reason: 'schedule_conflict' };
+
+const cancel = (baseUrl, id, body) =>
+   fetch(`${baseUrl}/appointment/${id}`, {
+      method: 'DELETE',
+      headers: {
+         'content-type': 'application/json',
+         ...authHeader(patientToken),
+      },
+      body: JSON.stringify(body),
+   });
 
 const get = (baseUrl, path, token) =>
    fetch(`${baseUrl}${path}`, {
@@ -481,13 +494,46 @@ describe('appointment routes', () => {
          });
       });
 
+      it('returns 400 when a patient gives no Cancellation Reason', async () => {
+         mockQueryQueue.push([patientUser]);
+
+         const res = await cancel(ctx.baseUrl, 1, {});
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            error: 'A valid cancellation reason is required',
+         });
+      });
+
+      it('returns 400 when the Cancellation Reason is unknown', async () => {
+         mockQueryQueue.push([patientUser]);
+
+         const res = await cancel(ctx.baseUrl, 1, { reason: 'bored' });
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            error: 'A valid cancellation reason is required',
+         });
+      });
+
+      it('returns 400 when the reason is Other without text', async () => {
+         mockQueryQueue.push([patientUser]);
+
+         const res = await cancel(ctx.baseUrl, 1, {
+            reason: 'other',
+            reasonText: '   ',
+         });
+
+         expect(res.status).toBe(400);
+         expect(await readJson(res)).toEqual({
+            error: 'Please describe your reason for cancelling',
+         });
+      });
+
       it('returns 404 when the appointment cannot be found', async () => {
          mockQueryQueue.push([patientUser], []);
 
-         const res = await fetch(`${ctx.baseUrl}/appointment/1`, {
-            method: 'DELETE',
-            headers: authHeader(patientToken),
-         });
+         const res = await cancel(ctx.baseUrl, 1, validReason);
 
          expect(res.status).toBe(404);
          expect(await readJson(res)).toEqual({
@@ -502,12 +548,53 @@ describe('appointment routes', () => {
             [],
          );
 
-         const res = await fetch(`${ctx.baseUrl}/appointment/1`, {
-            method: 'DELETE',
-            headers: authHeader(patientToken),
-         });
+         const res = await cancel(ctx.baseUrl, 1, validReason);
 
          expect(res.status).toBe(404);
+      });
+
+      it('stores the Cancellation Reason, who cancelled and when', async () => {
+         mockQueryQueue.push(
+            [patientUser],
+            [{ id: 1, status: 'scheduled', providerId: 11 }],
+            [{ id: 1 }],
+            [],
+            [null],
+         );
+
+         const res = await cancel(ctx.baseUrl, 1, {
+            reason: 'other',
+            reasonText: '  Moving to another city  ',
+         });
+
+         expect(res.status).toBe(204);
+         const { set } = mockMutationLog.find(
+            (entry) => entry.set?.status === 'cancelled',
+         );
+         expect(set).toMatchObject({
+            cancellationReason: 'other',
+            cancellationReasonText: 'Moving to another city',
+            cancelledByUserId: patientUser.id,
+         });
+         expect(set.cancelledAt).toBeInstanceOf(Date);
+      });
+
+      it('releases the waitlist offer in the same transaction', async () => {
+         mockQueryQueue.push(
+            [patientUser],
+            [{ id: 1, status: 'scheduled', providerId: 11 }],
+            [{ id: 1 }],
+            [],
+            [{ id: 7 }],
+            [],
+         );
+
+         const res = await cancel(ctx.baseUrl, 1, validReason);
+
+         expect(res.status).toBe(204);
+         expect(mockMutationLog).toContainEqual({
+            set: { status: 'cancelled', offerExpiresAt: null },
+         });
       });
 
       it('returns 204 when the appointment is cancelled', async () => {
@@ -519,12 +606,13 @@ describe('appointment routes', () => {
             [null],
          );
 
-         const res = await fetch(`${ctx.baseUrl}/appointment/1`, {
-            method: 'DELETE',
-            headers: authHeader(patientToken),
-         });
+         const res = await cancel(ctx.baseUrl, 1, validReason);
 
          expect(res.status).toBe(204);
+         const { set } = mockMutationLog.find(
+            (entry) => entry.set?.status === 'cancelled',
+         );
+         expect(set.cancellationReasonText).toBeNull();
       });
    });
 });
