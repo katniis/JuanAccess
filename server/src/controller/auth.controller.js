@@ -984,11 +984,21 @@ export const changePassword = async (req, res) => {
          .where(eq(users.id, req.user.id))
          .returning({ authVersion: users.authVersion });
       const authVersion = updated?.authVersion ?? (user.authVersion ?? 0) + 1;
-      const rememberMe = req.auth?.rememberMe === true;
+      const isStaff = isStaffRole(req.user.role);
+      const rememberMe = !isStaff && req.auth?.rememberMe === true;
       res.cookie(
          'token',
-         generateToken(req.user.id, authVersion, rememberMe),
-         rememberMe ? persistentCookieOptions : cookieOptions,
+         generateToken(
+            req.user.id,
+            authVersion,
+            rememberMe,
+            isStaff ? '12h' : '30d',
+         ),
+         isStaff
+            ? { ...cookieOptions, maxAge: staffSessionMs }
+            : rememberMe
+              ? persistentCookieOptions
+              : cookieOptions,
       );
       return res.json({ message: 'Password changed successfully.' });
    } catch (error) {
