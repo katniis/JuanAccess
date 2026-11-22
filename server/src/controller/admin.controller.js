@@ -7,6 +7,7 @@ import {
    sendEmail,
 } from '../services/email.service.js';
 import {
+   dutyScheduleOverrides,
    equipment,
    feeSchedule,
    insurancePlans,
@@ -43,6 +44,17 @@ const resources = {
    availability: {
       table: providerAvailability,
       fields: ['providerId', 'dayOfWeek', 'startTime', 'endTime'],
+   },
+   // Hours consistency is enforced by the table's check constraint (violations return 409).
+   'duty-overrides': {
+      table: dutyScheduleOverrides,
+      fields: [
+         'providerId',
+         'overrideDate',
+         'isDayOff',
+         'startTime',
+         'endTime',
+      ],
    },
    'fee-schedule': {
       table: feeSchedule,
