@@ -7837,6 +7837,163 @@ dialog::-webkit-scrollbar,
    margin: 0;
    padding: 16px 18px 20px;
 }
+/* Cancellation report: page spacing matches StaffDisputes, cards reuse the staff dashboard look. */
+.staff-report-page {
+   align-content: start;
+   padding: 30px 32px 34px;
+}
+.staff-report-results {
+   display: grid;
+   gap: 18px;
+   min-width: 0;
+}
+.staff-report-card {
+   overflow: hidden;
+}
+.staff-report-stat {
+   min-height: 0;
+}
+.staff-report-stat:hover {
+   border-color: #dce5ee;
+}
+.staff-report-stat .staff-summary-title {
+   margin: 0;
+   color: inherit;
+}
+.staff-report-stat .staff-summary-detail {
+   overflow-wrap: anywhere;
+}
+.staff-invite-form.staff-report-filters {
+   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.staff-report-grid {
+   display: grid;
+   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+   align-items: start;
+   gap: 18px;
+}
+.staff-report-bars,
+.staff-report-rows,
+.staff-report-other {
+   display: grid;
+   margin: 0;
+   padding: 8px 24px 16px;
+   list-style: none;
+}
+.staff-report-bars li {
+   display: grid;
+   grid-template-columns: minmax(0, 1fr) auto;
+   gap: 6px 12px;
+   padding: 12px 0;
+   border-bottom: 1px solid #edf1f5;
+}
+.staff-report-rows li {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   justify-content: space-between;
+   gap: 8px 12px;
+   padding: 14px 0;
+   border-bottom: 1px solid #edf1f5;
+}
+.staff-report-other li {
+   display: grid;
+   gap: 8px;
+   padding: 14px 0;
+   border-bottom: 1px solid #edf1f5;
+}
+.staff-report-bars li:last-child,
+.staff-report-rows li:last-child,
+.staff-report-other li:last-child {
+   border-bottom: 0;
+}
+.staff-report-bar-label {
+   min-width: 0;
+   color: #173652;
+   font-size: var(--type-body);
+   font-weight: 600;
+   overflow-wrap: anywhere;
+}
+.staff-report-bar-value {
+   color: #294866;
+   font-size: var(--type-body);
+   font-variant-numeric: tabular-nums;
+   text-align: right;
+   white-space: nowrap;
+}
+.staff-report-bar {
+   grid-column: 1 / -1;
+   height: 8px;
+   overflow: hidden;
+   border-radius: 99px;
+   background: #edf1f5;
+}
+.staff-report-bar > span {
+   display: block;
+   height: 100%;
+   border-radius: inherit;
+   background: #0c6482;
+}
+.staff-report-bars li.is-muted .staff-report-bar-label,
+.staff-report-bars li.is-muted .staff-report-bar-value {
+   color: #8294aa;
+   font-weight: 500;
+}
+.staff-report-bars li.is-muted .staff-report-bar > span {
+   background: #b7c4d3;
+}
+.staff-report-note {
+   margin: 0;
+   padding: 0 24px 20px;
+   color: #58728e;
+   font-size: var(--type-small);
+}
+.staff-report-other-meta {
+   display: flex;
+   flex-wrap: wrap;
+   align-items: center;
+   gap: 8px 12px;
+   color: #58728e;
+   font-size: var(--type-small);
+}
+.staff-report-other p {
+   margin: 0;
+   color: #173652;
+   font-size: var(--type-body);
+   line-height: 1.5;
+   overflow-wrap: anywhere;
+   white-space: pre-wrap;
+}
+.staff-report-empty {
+   margin: 0;
+   padding: 20px 24px 24px;
+   color: #58728e;
+   font-size: var(--type-body);
+}
+@media (max-width: 1000px) {
+   .staff-invite-form.staff-report-filters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+   .staff-report-grid {
+      grid-template-columns: minmax(0, 1fr);
+   }
+}
+@media (max-width: 620px) {
+   .staff-report-page {
+      padding: 22px 14px 30px;
+   }
+   .staff-invite-form.staff-report-filters {
+      grid-template-columns: minmax(0, 1fr);
+   }
+   .staff-report-bars,
+   .staff-report-rows,
+   .staff-report-other,
+   .staff-report-note,
+   .staff-report-empty {
+      padding-right: 18px;
+      padding-left: 18px;
+   }
+}
 .staff-attention-page .staff-attention-list {
    padding: 0;
 }
