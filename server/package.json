@@ -13,6 +13,7 @@
       "generate": "npx drizzle-kit generate",
       "migrate": "npx drizzle-kit migrate",
       "import:data": "node scripts/import-reference-data.js",
+      "seed:ph-public-data": "node scripts/seed-ph-public-reference-data.js",
       "security:check": "node scripts/check-db-security.js"
    },
    "keywords": [],
