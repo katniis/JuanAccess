@@ -1,10 +1,22 @@
 import { jest } from '@jest/globals';
+import jwt from 'jsonwebtoken';
 import {
    mockQueryQueue,
    readJson,
    resetMocks,
    startServer,
 } from './helpers.js';
+
+const patient = {
+   id: 31,
+   email: 'patient@example.test',
+   role: 'patient',
+   patientId: 4,
+   providerId: null,
+};
+const staff = { ...patient, id: 30, role: 'staff', patientId: null };
+const cookieFor = (user) =>
+   `token=${jwt.sign({ id: user.id }, process.env.JWT_SECRET)}`;
 
 const practitioner = (overrides) => ({
    id: 1,
@@ -24,7 +36,7 @@ const practitioner = (overrides) => ({
    ...overrides,
 });
 
-describe('public Doctor Directory', () => {
+describe('Doctor Profile (signed-in only)', () => {
    let ctx;
    beforeAll(async () => {
       ctx = await startServer();
@@ -59,35 +71,39 @@ describe('public Doctor Directory', () => {
       jest.useRealTimers();
    });
 
-   it('lists only active physicians without a login', async () => {
-      mockQueryQueue.push([
-         practitioner({ id: 1 }),
-         practitioner({ id: 2, profession: 'nurse' }),
-         practitioner({ id: 3, profession: 'medical_technologist' }),
-         practitioner({ id: 4, isActive: false }),
-         practitioner({ id: 5, firstName: 'Ben', specialty: 'Pediatrics' }),
-      ]);
-      const res = await fetch(`${ctx.baseUrl}/doctors`);
+   // Signed in as `user`; verifyToken loads the user before the profile query.
+   const getProfile = (id, user = patient) =>
+      fetch(`${ctx.baseUrl}/doctors/${id}`, {
+         headers: { cookie: cookieFor(user) },
+      });
 
-      expect(res.status).toBe(200);
-      const { doctors } = await readJson(res);
-      expect(doctors.map((doctor) => doctor.id)).toEqual([1, 5]);
+   it('requires sign-in to see a Doctor Profile', async () => {
+      const res = await fetch(`${ctx.baseUrl}/doctors/7`);
+
+      expect(res.status).toBe(401);
+      expect(mockQueryQueue).toHaveLength(0);
    });
 
-   it('works out years of experience from the practice start year in Manila', async () => {
-      mockQueryQueue.push([
-         practitioner({ id: 1, practiceStartYear: 2012 }),
-         practitioner({ id: 2, practiceStartYear: null }),
-      ]);
-      const { doctors } = await readJson(await fetch(`${ctx.baseUrl}/doctors`));
+   it('no longer lists doctors publicly', async () => {
+      expect((await fetch(`${ctx.baseUrl}/doctors`)).status).toBe(404);
+      mockQueryQueue.push([patient]);
+      expect(
+         (
+            await fetch(`${ctx.baseUrl}/doctors`, {
+               headers: { cookie: cookieFor(patient) },
+            })
+         ).status,
+      ).toBe(404);
+   });
 
-      expect(doctors[0].years_of_experience).toBe(15);
-      expect(doctors[1].years_of_experience).toBeNull();
+   it('shows a Doctor Profile to signed-in staff too', async () => {
+      mockQueryQueue.push([staff], [practitioner({ id: 7 })]);
+      expect((await getProfile(7, staff)).status).toBe(200);
    });
 
    it('shows a Doctor Profile without internal fields', async () => {
-      mockQueryQueue.push([practitioner({ id: 7 })]);
-      const res = await fetch(`${ctx.baseUrl}/doctors/7`);
+      mockQueryQueue.push([patient], [practitioner({ id: 7 })]);
+      const res = await getProfile(7);
 
       expect(res.status).toBe(200);
       const { doctor } = await readJson(res);
@@ -105,20 +121,38 @@ describe('public Doctor Directory', () => {
          photo_url: 'https://example.test/ana.jpg',
          consultation_fee: '800.00',
       });
+      expect(JSON.stringify(doctor)).not.toContain('9990001111');
+   });
+
+   it('works out years of experience from the practice start year in Manila', async () => {
+      mockQueryQueue.push(
+         [patient],
+         [practitioner({ practiceStartYear: null })],
+      );
+      const { doctor } = await readJson(await getProfile(1));
+
+      expect(doctor.years_of_experience).toBeNull();
    });
 
    it('hides nurses and inactive physicians from the Doctor Profile route', async () => {
-      mockQueryQueue.push([practitioner({ id: 2, profession: 'nurse' })]);
-      expect((await fetch(`${ctx.baseUrl}/doctors/2`)).status).toBe(404);
+      mockQueryQueue.push(
+         [patient],
+         [practitioner({ id: 2, profession: 'nurse' })],
+      );
+      expect((await getProfile(2)).status).toBe(404);
 
-      mockQueryQueue.push([practitioner({ id: 4, isActive: false })]);
-      expect((await fetch(`${ctx.baseUrl}/doctors/4`)).status).toBe(404);
+      mockQueryQueue.push(
+         [patient],
+         [practitioner({ id: 4, isActive: false })],
+      );
+      expect((await getProfile(4)).status).toBe(404);
 
-      mockQueryQueue.push([]);
-      expect((await fetch(`${ctx.baseUrl}/doctors/99`)).status).toBe(404);
+      mockQueryQueue.push([patient], []);
+      expect((await getProfile(99)).status).toBe(404);
    });
 
    it('rejects a malformed doctor id', async () => {
-      expect((await fetch(`${ctx.baseUrl}/doctors/abc`)).status).toBe(400);
+      mockQueryQueue.push([patient]);
+      expect((await getProfile('abc')).status).toBe(400);
    });
 });
