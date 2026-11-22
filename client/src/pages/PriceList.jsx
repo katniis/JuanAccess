@@ -50,23 +50,6 @@ function PriceList() {
             {!priceList && !error && <p role="status">Loading prices…</p>}
             {priceList && (
                <>
-                  <h2>Consultation Fees</h2>
-                  <table className="price-list-table">
-                     <tbody>
-                        {priceList.consultationFees.map((doctor) => (
-                           <tr key={doctor.id}>
-                              <th scope="row">
-                                 Dr. {doctor.firstName} {doctor.lastName}
-                                 {doctor.specialty && (
-                                    <small> · {doctor.specialty}</small>
-                                 )}
-                              </th>
-                              <td>{formatPeso(doctor.consultationFee)}</td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-
                   <h2>Procedures</h2>
                   <table className="price-list-table">
                      <tbody>
