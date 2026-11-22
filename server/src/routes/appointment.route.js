@@ -2,6 +2,7 @@ import express from 'express';
 import {
    cancelAppointment,
    createAppointment,
+   draftCancellationLetterHandler,
    getAllVisitTypes,
    getAvailableSlots,
    getMyAppointments,
@@ -17,5 +18,10 @@ router.get('/available-slots', verifyToken, getAvailableSlots);
 router.post('/', verifyToken, createAppointment);
 router.get('/mine', verifyToken, getMyAppointments);
 router.delete('/:id', verifyToken, cancelAppointment);
+router.post(
+   '/:id/cancellation-letter/draft',
+   verifyToken,
+   draftCancellationLetterHandler,
+);
 
 export default router;

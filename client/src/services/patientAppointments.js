@@ -176,9 +176,16 @@ export const PATIENT_CANCELLATION_REASONS = [
    { value: 'other', label: 'Other' },
 ];
 
-export function cancelPatientAppointment(id, { reason, reasonText }) {
+export function cancelPatientAppointment(id, { reason, reasonText, letter }) {
    return patientRequest('/appointment/' + id, {
       method: 'DELETE',
-      body: { reason, reasonText },
+      body: { reason, reasonText, letter },
    });
+}
+
+export function draftPatientCancellationLetter(id, { reason, reasonText }) {
+   return patientRequest(
+      `/appointment/${encodeURIComponent(id)}/cancellation-letter/draft`,
+      { method: 'POST', body: { reason, reasonText } },
+   );
 }

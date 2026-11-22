@@ -630,7 +630,7 @@ export async function getResourceUtilization(date) {
 
 export async function staffCancelAppointment(
    appointmentId,
-   { userId, reason, reasonText },
+   { userId, reason, reasonText, letter = null },
 ) {
    return await db.transaction(
       async (tx) => {
@@ -654,6 +654,7 @@ export async function staffCancelAppointment(
                status: 'cancelled',
                cancellationReason: reason,
                cancellationReasonText: reasonText,
+               cancellationLetter: letter,
                cancelledByUserId: userId,
                cancelledAt: now,
                updatedAt: now,
@@ -682,7 +683,8 @@ export async function staffCancelAppointment(
             tx,
             appointment.patientId,
             'appointment_cancelled',
-            'Your appointment was cancelled by clinic staff.',
+            // The staff Cancellation Letter, when written, is the patient's notification.
+            letter || 'Your appointment was cancelled by clinic staff.',
          );
 
          // Cancel any pending waitlist offer on this appointment
