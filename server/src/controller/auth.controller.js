@@ -17,6 +17,8 @@ import {
    isEmailDeliveryEnabled,
    sendEmail,
 } from '../services/email.service.js';
+import { recordAudit } from '../services/audit.service.js';
+import { insertNotification } from '../services/notification.service.js';
 
 const cookieOptions = {
    httpOnly: true,
@@ -29,7 +31,18 @@ const persistentCookieOptions = {
    maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
-const generateToken = (id, authVersion = 0, rememberMe = false) => {
+const staffSessionMs = 12 * 60 * 60 * 1000;
+const isStaffRole = (role) => role === 'staff' || role === 'staff_admin';
+const maxFailedLogins = 5;
+const lockoutMs = 15 * 60 * 1000;
+const loginRequestsPerWindow = 20;
+
+const generateToken = (
+   id,
+   authVersion = 0,
+   rememberMe = false,
+   expiresIn = '30d',
+) => {
    if (!process.env.JWT_SECRET) {
       throw new Error(
          'JWT_SECRET is required to create authentication tokens.',
@@ -37,7 +50,7 @@ const generateToken = (id, authVersion = 0, rememberMe = false) => {
    }
 
    return jwt.sign({ id, authVersion, rememberMe }, process.env.JWT_SECRET, {
-      expiresIn: '30d',
+      expiresIn,
    });
 };
 
@@ -379,6 +392,12 @@ export const acceptStaffInvitation = async (req, res) => {
 
 export const login = async (req, res) => {
    try {
+      if (!allowActionRequest(req, 'login', loginRequestsPerWindow)) {
+         return res
+            .status(429)
+            .json({ message: 'Too many login attempts. Try again later.' });
+      }
+
       const { email, password, rememberMe = false } = req.body ?? {};
       if (!email || !password) {
          return res
@@ -387,15 +406,71 @@ export const login = async (req, res) => {
       }
 
       const user = await findUserByEmail(email);
-      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      // shortcut: unknown emails are not audited (audit_log.entity_id is NOT NULL).
+      if (!user) {
          return res.status(401).json({ message: 'Invalid credentials.' });
       }
+
+      const audit = (action, newValue) =>
+         void recordAudit({
+            entityType: 'user',
+            entityId: user.id,
+            action,
+            changedBy: user.id,
+            newValue: { ip: req.ip, ...newValue },
+         });
+
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+         audit('login_locked');
+         return res.status(423).json({
+            message: 'Account is temporarily locked. Try again later.',
+         });
+      }
+
+      if (!(await bcrypt.compare(password, user.passwordHash))) {
+         const attempts = (user.failedLoginAttempts ?? 0) + 1;
+         const lock = attempts >= maxFailedLogins;
+         const lockedUntil = lock ? new Date(Date.now() + lockoutMs) : null;
+         await db
+            .update(users)
+            .set({ failedLoginAttempts: lock ? 0 : attempts, lockedUntil })
+            .where(eq(users.id, user.id));
+         audit(lock ? 'login_lockout' : 'login_failed', { attempts });
+         return res.status(401).json({ message: 'Invalid credentials.' });
+      }
+
+      if (user.failedLoginAttempts || user.lockedUntil) {
+         await db
+            .update(users)
+            .set({ failedLoginAttempts: 0, lockedUntil: null })
+            .where(eq(users.id, user.id));
+      }
+
+      const isStaff = isStaffRole(user.role);
+      if (isStaff) {
+         await insertNotification(db, {
+            userId: user.id,
+            type: 'new_login',
+            message: `New sign-in to your staff account at ${new Date().toISOString()}.`,
+            emailEnabled: false,
+         });
+      }
+      audit('login_success');
 
       const shouldRemember = rememberMe === true;
       res.cookie(
          'token',
-         generateToken(user.id, user.authVersion ?? 0, shouldRemember),
-         shouldRemember ? persistentCookieOptions : cookieOptions,
+         generateToken(
+            user.id,
+            user.authVersion ?? 0,
+            shouldRemember,
+            isStaff ? '12h' : '30d',
+         ),
+         isStaff
+            ? { ...cookieOptions, maxAge: staffSessionMs }
+            : shouldRemember
+              ? persistentCookieOptions
+              : cookieOptions,
       );
       return res.json({ user: safeUser(user) });
    } catch (error) {

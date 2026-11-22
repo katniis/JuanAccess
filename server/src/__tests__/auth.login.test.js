@@ -1,13 +1,21 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import {
+import { jest } from '@jest/globals';
+
+const mockRecordAudit = jest.fn();
+jest.unstable_mockModule('../services/audit.service.js', () => ({
+   recordAudit: mockRecordAudit,
+}));
+
+const {
    startServer,
    readJson,
    getCookie,
    resetMocks,
    mockQueryQueue,
+   mockMutationLog,
    postJson,
-} from './helpers.js';
+} = await import('./helpers.js');
 
 const passwordHash = bcrypt.hashSync('correct-horse', 10);
 
@@ -32,7 +40,10 @@ describe('POST /auth/login', () => {
       await ctx.close();
    });
 
-   beforeEach(resetMocks);
+   beforeEach(() => {
+      resetMocks();
+      mockRecordAudit.mockReset();
+   });
 
    it('returns 400 when email is missing', async () => {
       const res = await postJson(ctx.baseUrl, '/auth/login', {
@@ -126,5 +137,121 @@ describe('POST /auth/login', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('set-cookie')).toMatch(/max-age=2592000/i);
       expect(jwt.decode(getCookie(res, 'token')).rememberMe).toBe(true);
+   });
+
+   it('locks the account on the fifth failed attempt', async () => {
+      mockQueryQueue.push([{ ...userRow, failedLoginAttempts: 4 }], []);
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'wrong-password',
+      });
+
+      expect(res.status).toBe(401);
+      const { set } = mockMutationLog.find((entry) => entry.set);
+      expect(set.failedLoginAttempts).toBe(0);
+      expect(set.lockedUntil.getTime()).toBeGreaterThan(Date.now());
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+         expect.objectContaining({ entityId: 1, action: 'login_lockout' }),
+      );
+   });
+
+   it('counts a failed attempt below the threshold without locking', async () => {
+      mockQueryQueue.push([{ ...userRow, failedLoginAttempts: 1 }], []);
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'wrong-password',
+      });
+
+      expect(res.status).toBe(401);
+      expect(mockMutationLog).toContainEqual({
+         set: { failedLoginAttempts: 2, lockedUntil: null },
+      });
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+         expect.objectContaining({ entityId: 1, action: 'login_failed' }),
+      );
+   });
+
+   it('refuses correct credentials while the account is locked', async () => {
+      mockQueryQueue.push([
+         { ...userRow, lockedUntil: new Date(Date.now() + 60_000) },
+      ]);
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'correct-horse',
+      });
+
+      expect(res.status).toBe(423);
+      expect(getCookie(res, 'token')).toBeNull();
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+         expect.objectContaining({ entityId: 1, action: 'login_locked' }),
+      );
+   });
+
+   it('allows login once the lock has expired and clears it', async () => {
+      mockQueryQueue.push(
+         [{ ...userRow, lockedUntil: new Date(Date.now() - 60_000) }],
+         [],
+      );
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'correct-horse',
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockMutationLog).toContainEqual({
+         set: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+   });
+
+   it('gives a patient a 30-day token and audits the login without notifying', async () => {
+      mockQueryQueue.push([userRow]);
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'patient@example.com',
+         password: 'correct-horse',
+      });
+
+      expect(res.status).toBe(200);
+      const { iat, exp } = jwt.decode(getCookie(res, 'token'));
+      expect(exp - iat).toBe(30 * 24 * 60 * 60);
+      expect(mockMutationLog).toEqual([]);
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+         expect.objectContaining({ entityId: 1, action: 'login_success' }),
+      );
+   });
+
+   it('gives staff a 12-hour session and a new-login notification', async () => {
+      mockQueryQueue.push(
+         [
+            {
+               ...userRow,
+               id: 7,
+               email: 'staff@example.com',
+               role: 'staff',
+               patientId: null,
+            },
+         ],
+         [{ id: 99 }],
+      );
+
+      const res = await postJson(ctx.baseUrl, '/auth/login', {
+         email: 'staff@example.com',
+         password: 'correct-horse',
+      });
+
+      expect(res.status).toBe(200);
+      const { iat, exp } = jwt.decode(getCookie(res, 'token'));
+      expect(exp - iat).toBe(12 * 60 * 60);
+      expect(res.headers.get('set-cookie')).toMatch(/max-age=43200/i);
+      expect(mockMutationLog).toContainEqual({
+         values: expect.objectContaining({ userId: 7, type: 'new_login' }),
+      });
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+         expect.objectContaining({ entityId: 7, action: 'login_success' }),
+      );
    });
 });

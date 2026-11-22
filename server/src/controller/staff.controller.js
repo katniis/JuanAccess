@@ -380,7 +380,7 @@ export const getPriorAuthQueue = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             sql`LATERAL (
@@ -463,7 +463,7 @@ export const getPriorAuthDetail = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .where(eq(priorAuthorizations.id, authId))
          .limit(1);
@@ -830,7 +830,7 @@ export const getAppealsQueue = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             clinicalGuidelines,
@@ -897,7 +897,7 @@ export const getAppealDetail = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             clinicalGuidelines,

@@ -456,6 +456,25 @@ describe('appointment routes', () => {
          expect(res.status).toBe(200);
          expect(await readJson(res)).toEqual(rows);
       });
+
+      it('returns an appointment with no practitioner or room', async () => {
+         const rows = [
+            {
+               id: 2,
+               status: 'scheduled',
+               providerId: null,
+               roomId: null,
+               providerFirst: null,
+               providerLast: null,
+            },
+         ];
+         mockQueryQueue.push([patientUser], rows);
+
+         const res = await get(ctx.baseUrl, '/appointment/mine', patientToken);
+
+         expect(res.status).toBe(200);
+         expect(await readJson(res)).toEqual(rows);
+      });
    });
 
    describe('DELETE /appointment/:id', () => {
@@ -525,6 +544,27 @@ describe('appointment routes', () => {
          });
 
          expect(res.status).toBe(204);
+      });
+
+      it('cancels an appointment with no practitioner without offering a waitlist slot', async () => {
+         const unused = [{ specialty: 'must not be read' }];
+         mockQueryQueue.push(
+            [patientUser],
+            [{ id: 1, status: 'scheduled', providerId: null, roomId: null }],
+            [{ id: 1 }],
+            [],
+            [null],
+            unused,
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/appointment/1`, {
+            method: 'DELETE',
+            headers: authHeader(patientToken),
+         });
+
+         expect(res.status).toBe(204);
+         // Only waitlist offers read the practitioner; none for an APE Booking.
+         expect(mockQueryQueue).toEqual([unused]);
       });
    });
 });
