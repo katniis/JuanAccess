@@ -13,9 +13,7 @@ import {
 } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
-   apePackages,
    appointments,
-   arrivalWindows,
    dutyScheduleOverrides,
    equipment,
    preVisitSummaries,
@@ -26,7 +24,6 @@ import {
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
-import { APE_VISIT_TYPE_NAME } from './ape-booking.controller.js';
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
 import {
    dutyWindowsOn,
@@ -53,11 +50,7 @@ const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
 
 export const getAllVisitTypes = async (req, res) => {
    try {
-      // APE Bookings go through /appointment/ape, not the slot booking flow.
-      const types = await db
-         .select()
-         .from(visitTypes)
-         .where(ne(visitTypes.name, APE_VISIT_TYPE_NAME));
+      const types = await db.select().from(visitTypes);
       return res.status(200).json({ visitTypes: types });
    } catch (error) {
       console.error('Failed to fetch visit types:', error);
@@ -159,7 +152,7 @@ export const getAvailableSlots = async (req, res) => {
             providerAvailability,
             eq(providerAvailability.providerId, providers.id),
          );
-      // Consults are booked only with physicians (other Professions staff APE stations).
+      // Consults are booked only with physicians.
       const eligibleProviders = await providerQuery.where(
          and(
             eq(providers.isActive, true),
@@ -315,9 +308,6 @@ export const createAppointment = async (req, res) => {
                .limit(1);
             if (!visitType) {
                return { error: 'Visit type not found', status: 404 };
-            }
-            if (visitType.name === APE_VISIT_TYPE_NAME) {
-               return { error: 'Book an APE through APE booking', status: 400 };
             }
             const requiredSpecialty = normalizeSpecialty(
                visitType.requiredSpecialty,
@@ -543,17 +533,9 @@ export const getMyAppointments = async (req, res) => {
             providerFirst: providers.firstName,
             providerLast: providers.lastName,
             visitTypeName: visitTypes.name,
-            apePackageId: appointments.apePackageId,
-            apePackageName: apePackages.name,
-            arrivalWindowName: arrivalWindows.name,
          })
          .from(appointments)
          .leftJoin(providers, eq(providers.id, appointments.providerId))
-         .leftJoin(apePackages, eq(apePackages.id, appointments.apePackageId))
-         .leftJoin(
-            arrivalWindows,
-            eq(arrivalWindows.id, appointments.arrivalWindowId),
-         )
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             priorAuthorizations,

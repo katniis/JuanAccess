@@ -7,7 +7,6 @@ import {
    waitlistEntries,
 } from '../db/schema/index.js';
 import { closeOffer, confirmOffer } from '../services/waitlist.service.js';
-import { APE_VISIT_TYPE_NAME } from './ape-booking.controller.js';
 
 export const joinWaitlist = async (req, res) => {
    if (!requirePatient(req, res)) {
@@ -47,12 +46,6 @@ export const joinWaitlist = async (req, res) => {
          .limit(1);
       if (!visitType) {
          return res.status(404).json({ error: 'Visit type not found' });
-      }
-      // APE Bookings have no waitlist (ADR 0002).
-      if (visitType.name === APE_VISIT_TYPE_NAME) {
-         return res
-            .status(400)
-            .json({ error: 'Book an APE through APE booking' });
       }
       if (providerId !== undefined && providerId !== null) {
          const [provider] = await db

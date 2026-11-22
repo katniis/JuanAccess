@@ -53,22 +53,7 @@ import {
    updateAdminPractitioner,
    uploadAdminPractitionerPhoto,
    updateAdminUser,
-   createAdminArrivalWindow,
-   deleteAdminArrivalWindow,
-   listAdminArrivalWindows,
-   updateAdminArrivalWindow,
 } from '../controller/admin.controller.js';
-import {
-   createApePackage,
-   deleteApePackage,
-   listApePackages,
-   updateApePackage,
-} from '../controller/ape-package.controller.js';
-import {
-   assignStation,
-   getApeQueue,
-   listEligiblePractitioners,
-} from '../controller/station-assignment.controller.js';
 
 const router = express.Router();
 const photoUpload = multer({
@@ -117,12 +102,6 @@ router.post(
 );
 router.patch('/appointments/:id/reschedule', rescheduleAppointmentStaff);
 router.get('/waitlist', getWaitlistMonitor);
-router.get('/ape-queue', getApeQueue);
-router.get(
-   '/ape-queue/procedures/:id/practitioners',
-   listEligiblePractitioners,
-);
-router.post('/ape-queue/procedures/:id/assignment', assignStation);
 router.get(
    '/reports/cancellations',
    requireStaffAdmin,
@@ -178,26 +157,6 @@ router.post(
    parsePhotoUpload,
    uploadAdminPractitionerPhoto,
 );
-router.get(
-   '/admin/arrival-windows',
-   requireStaffAdmin,
-   listAdminArrivalWindows,
-);
-router.post(
-   '/admin/arrival-windows',
-   requireStaffAdmin,
-   createAdminArrivalWindow,
-);
-router.patch(
-   '/admin/arrival-windows/:id',
-   requireStaffAdmin,
-   updateAdminArrivalWindow,
-);
-router.delete(
-   '/admin/arrival-windows/:id',
-   requireStaffAdmin,
-   deleteAdminArrivalWindow,
-);
 router.get('/admin/reference-data', requireStaffAdmin, listAdminReferenceData);
 router.post(
    '/admin/reference/:resource',
@@ -214,10 +173,6 @@ router.delete(
    requireStaffAdmin,
    deleteAdminReference,
 );
-router.get('/admin/ape-packages', requireStaffAdmin, listApePackages);
-router.post('/admin/ape-packages', requireStaffAdmin, createApePackage);
-router.patch('/admin/ape-packages/:id', requireStaffAdmin, updateApePackage);
-router.delete('/admin/ape-packages/:id', requireStaffAdmin, deleteApePackage);
 
 // 6. Insurance Verification (New Patient Handling)
 router.get('/insurance/unverified', requireStaffAdmin, getUnverifiedCoverages);

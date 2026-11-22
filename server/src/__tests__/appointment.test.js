@@ -385,7 +385,7 @@ describe('appointment routes', () => {
          expect(Array.isArray(body.slots)).toBe(true);
          expect(body.slots.length).toBeGreaterThan(0);
          expect(body.slots[0]).toHaveProperty('provider_id', 7);
-         // Only physicians are consult doctors; other Professions staff APE stations.
+         // Only physicians are consult doctors.
          expect(filteredToPhysicians()).toBe(true);
       });
    });
@@ -774,7 +774,7 @@ describe('appointment routes', () => {
          const res = await cancel(ctx.baseUrl, 1, validReason);
 
          expect(res.status).toBe(204);
-         // Only waitlist offers read the practitioner; none for an APE Booking.
+         // Only waitlist offers read the practitioner; there is none here.
          expect(mockQueryQueue).toEqual([unused]);
       });
    });
