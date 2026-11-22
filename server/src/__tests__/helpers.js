@@ -33,6 +33,7 @@ jest.unstable_mockModule('../db/index.js', () => {
          where: () => make(value),
          limit: () => make(value),
          orderBy: () => make(value),
+         for: () => make(value),
          innerJoin: () => make(value),
          leftJoin: () => make(value),
          values: (values) => {

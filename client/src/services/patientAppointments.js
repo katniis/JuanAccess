@@ -139,7 +139,10 @@ export function mapPatientAppointment(appointment) {
       providerName: appointment.providerFirst
          ? 'Dr. ' + appointment.providerFirst + ' ' + appointment.providerLast
          : 'Assigned on the day',
-      visitType: appointment.visitTypeName || 'Appointment',
+      visitType: appointment.apePackageId
+         ? `APE · ${appointment.apePackageName || 'APE Package'}`
+         : appointment.visitTypeName || 'Appointment',
+      isApe: Boolean(appointment.apePackageId),
       scheduledStart: appointment.scheduledStart,
       scheduledEnd: appointment.scheduledEnd,
       status: appointment.status,
@@ -155,9 +158,11 @@ export function mapPatientAppointment(appointment) {
               day: 'numeric',
            }).format(start)
          : '—',
-      timeLabel: hasValidStart
-         ? formatClinicTime(appointment.scheduledStart)
-         : 'Time unavailable',
+      timeLabel: !hasValidStart
+         ? 'Time unavailable'
+         : appointment.apePackageId
+           ? `Arrive ${formatClinicTime(appointment.scheduledStart)} – ${formatClinicTime(appointment.scheduledEnd)}`
+           : formatClinicTime(appointment.scheduledStart),
       insuranceStatus: insurance.pill,
       insuranceLabel: insurance.label,
       insuranceDescription: insurance.description,
