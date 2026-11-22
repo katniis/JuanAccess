@@ -21,6 +21,7 @@ import PatientSettings from './pages/patient/PatientSettings.jsx';
 import StaffLayout from './layouts/StaffLayout.jsx';
 import StaffAppeals from './pages/staff/StaffAppeals.jsx';
 import StaffSettings from './pages/staff/StaffSettings.jsx';
+import StaffCancellationReport from './pages/staff/StaffCancellationReport.jsx';
 import StaffAttention from './pages/staff/StaffAttention.jsx';
 import StaffDashboard from './pages/staff/StaffDashboard.jsx';
 import StaffDisputeDetail from './pages/staff/StaffDisputeDetail.jsx';
@@ -226,6 +227,10 @@ function App() {
                      />
                      <Route path="attention" element={<StaffAttention />} />
                      <Route path="settings" element={<StaffSettings />} />
+                     <Route
+                        path="reports/cancellations"
+                        element={<StaffCancellationReport />}
+                     />
                      <Route
                         path="records/:recordType/:recordId"
                         element={<StaffPatientRecord />}

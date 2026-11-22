@@ -10,6 +10,7 @@ import {
    getAppealsQueue,
    getAppointmentPreVisitData,
    getAppointmentProcedures,
+   getCancellationReportHandler,
    createAppointmentProcedure,
    getStaffDisputes,
    getStaffDisputeDetail,
@@ -99,6 +100,11 @@ router.post(
 );
 router.patch('/appointments/:id/reschedule', rescheduleAppointmentStaff);
 router.get('/waitlist', getWaitlistMonitor);
+router.get(
+   '/reports/cancellations',
+   requireStaffAdmin,
+   getCancellationReportHandler,
+);
 
 // 3. Prior-Authorization Queue
 router.get('/prior-auth', getPriorAuthQueue);
