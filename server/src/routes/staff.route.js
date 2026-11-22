@@ -45,6 +45,7 @@ import {
    deleteAdminReference,
    listAdminReferenceData,
    listAdminUsers,
+   issueUserEnrolmentCode,
    resetUserSecondFactor,
    updateAdminReference,
    createAdminPractitioner,
@@ -157,6 +158,11 @@ router.post(
    '/admin/users/:id/second-factor/reset',
    requireStaffAdmin,
    resetUserSecondFactor,
+);
+router.post(
+   '/admin/users/:id/enrolment-code',
+   requireStaffAdmin,
+   issueUserEnrolmentCode,
 );
 router.post('/admin/invitations', requireStaffAdmin, createStaffInvitation);
 router.get('/admin/practitioners', requireStaffAdmin, listAdminPractitioners);

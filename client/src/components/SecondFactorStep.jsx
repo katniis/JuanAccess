@@ -5,19 +5,24 @@ import {
    verifySecondFactor,
 } from '../services/auth.js';
 
+const enrolmentHint = 'Ask a staff admin for an enrolment code.';
+
 // mode: 'required' (enter a code) or 'setup_required' (scan QR, confirm, save Recovery Codes).
-function SecondFactorStep({ mode, onComplete, onCancel }) {
+// needsEnrolmentCode: setup starts only after an Enrolment Code (not for invited staff).
+function SecondFactorStep({ mode, needsEnrolmentCode, onComplete, onCancel }) {
    const isSetup = mode === 'setup_required';
    const [setup, setSetup] = useState(null);
    const [code, setCode] = useState('');
+   const [enrolmentCode, setEnrolmentCode] = useState('');
    const [useRecoveryCode, setUseRecoveryCode] = useState(false);
    const [recoveryCodes, setRecoveryCodes] = useState(null);
    const [completedUser, setCompletedUser] = useState(null);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const askEnrolmentCode = isSetup && needsEnrolmentCode && !setup;
 
    useEffect(() => {
-      if (!isSetup) return undefined;
+      if (!isSetup || needsEnrolmentCode) return undefined;
       let current = true;
       startSecondFactorSetup()
          .then((result) => current && setSetup(result))
@@ -25,7 +30,20 @@ function SecondFactorStep({ mode, onComplete, onCancel }) {
       return () => {
          current = false;
       };
-   }, [isSetup]);
+   }, [isSetup, needsEnrolmentCode]);
+
+   const submitEnrolmentCode = async (event) => {
+      event.preventDefault();
+      setError('');
+      setIsSubmitting(true);
+      try {
+         setSetup(await startSecondFactorSetup(enrolmentCode.trim()));
+      } catch (setupError) {
+         setError(setupError.message || enrolmentHint);
+      } finally {
+         setIsSubmitting(false);
+      }
+   };
 
    const submit = async (event) => {
       event.preventDefault();
@@ -74,6 +92,51 @@ function SecondFactorStep({ mode, onComplete, onCancel }) {
                </button>
             </div>
          </div>
+      );
+   }
+
+   if (askEnrolmentCode) {
+      return (
+         <form
+            className="auth-form"
+            onSubmit={submitEnrolmentCode}
+            aria-busy={isSubmitting}>
+            <p className="auth-step-note">
+               Enter the enrolment code a staff admin gave you to start setup.
+               Don’t have one? {enrolmentHint}
+            </p>
+            <div className="auth-field">
+               <label htmlFor="enrolment-code">Enrolment code</label>
+               <input
+                  id="enrolment-code"
+                  name="enrolmentCode"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={24}
+                  value={enrolmentCode}
+                  onChange={(event) => setEnrolmentCode(event.target.value)}
+                  required
+                  autoFocus
+               />
+            </div>
+            {error && (
+               <p className="auth-error" role="alert">
+                  {error}
+               </p>
+            )}
+            <div className="auth-form-actions">
+               <button className="auth-back" type="button" onClick={onCancel}>
+                  Back
+               </button>
+               <button
+                  className="auth-submit"
+                  type="submit"
+                  disabled={isSubmitting}>
+                  {isSubmitting ? 'Please wait…' : 'Continue'}
+               </button>
+            </div>
+         </form>
       );
    }
 

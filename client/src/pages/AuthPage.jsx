@@ -278,6 +278,7 @@ function AuthPage({ mode = 'signin' }) {
                {secondFactorStep && (
                   <SecondFactorStep
                      mode={secondFactorStep}
+                     needsEnrolmentCode={!isInvitation}
                      onComplete={completeSecondFactor}
                      onCancel={() => {
                         // A used invite can't be resubmitted; finish setup via sign-in.

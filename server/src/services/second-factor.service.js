@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { Secret, TOTP } from 'otpauth';
+import { and, eq, isNull } from 'drizzle-orm';
+import { enrolmentCodes } from '../db/schema/enrolmentCodes.js';
 
 function encryptionKey() {
    const raw = process.env.TOTP_ENCRYPTION_KEY;
@@ -67,3 +69,34 @@ export const newRecoveryCodes = (count = 10) =>
          .toString('hex')
          .replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3'),
    );
+
+// Same keyed hash as Recovery Codes, domain-separated so the two can never match.
+export const hashEnrolmentCode = (code) =>
+   crypto
+      .createHmac('sha256', encryptionKey())
+      .update(`enrolment:${normalizeRecoveryCode(code)}`)
+      .digest('hex');
+
+const enrolmentCodeMs = () =>
+   (Number(process.env.ENROLMENT_CODE_HOURS) || 24) * 60 * 60 * 1000;
+
+// Replaces any unused Enrolment Code for the user; returns the plaintext once.
+export async function issueEnrolmentCode(executor, userId, issuedByUserId) {
+   const code = crypto
+      .randomBytes(8)
+      .toString('hex')
+      .replace(/(.{4})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4');
+   const expiresAt = new Date(Date.now() + enrolmentCodeMs());
+   await executor
+      .delete(enrolmentCodes)
+      .where(
+         and(eq(enrolmentCodes.userId, userId), isNull(enrolmentCodes.usedAt)),
+      );
+   await executor.insert(enrolmentCodes).values({
+      userId,
+      codeHash: hashEnrolmentCode(code),
+      expiresAt,
+      issuedByUserId,
+   });
+   return { enrolmentCode: code, expiresAt };
+}

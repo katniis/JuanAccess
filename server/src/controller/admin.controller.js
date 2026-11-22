@@ -22,6 +22,7 @@ import {
 } from '../db/schema/index.js';
 import { PROFESSIONS } from '../db/schema/providers.js';
 import { isPesoAmount } from '../utils/money.js';
+import { issueEnrolmentCode } from '../services/second-factor.service.js';
 import {
    isSupportedPhotoType,
    storePractitionerPhoto,
@@ -282,9 +283,9 @@ export async function resetUserSecondFactor(req, res) {
                ),
             )
             .returning({ id: users.id });
-         if (!row) return false;
+         if (!row) return null;
          await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, id));
-         return true;
+         return issueEnrolmentCode(tx, id, req.user.id);
       });
       if (!reset)
          return res.status(404).json({ error: 'Staff user not found' });
@@ -293,11 +294,47 @@ export async function resetUserSecondFactor(req, res) {
          entityId: id,
          action: 'second_factor_reset',
          changedBy: req.user.id,
+         newValue: { enrolmentCodeExpiresAt: reset.expiresAt },
       });
-      return res.json({ id, secondFactor: 'setup_required' });
+      return res.json({ id, secondFactor: 'setup_required', ...reset });
    } catch (error) {
       console.error('Failed to reset Second Factor:', error);
       return res.status(500).json({ error: 'Failed to reset Second Factor' });
+   }
+}
+
+// The plaintext code is returned once and never logged or audited.
+export async function issueUserEnrolmentCode(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid user ID' });
+   try {
+      const [target] = await db
+         .select({ id: users.id })
+         .from(users)
+         .where(
+            and(
+               eq(users.id, id),
+               inArray(users.role, ['staff', 'staff_admin']),
+            ),
+         )
+         .limit(1);
+      if (!target)
+         return res.status(404).json({ error: 'Staff user not found' });
+      const issued = await db.transaction((tx) =>
+         issueEnrolmentCode(tx, id, req.user.id),
+      );
+      void recordAudit({
+         entityType: 'user',
+         entityId: id,
+         action: 'enrolment_code_issued',
+         changedBy: req.user.id,
+         newValue: { expiresAt: issued.expiresAt },
+      });
+      return res.status(201).json(issued);
+   } catch (error) {
+      console.error('Failed to issue Enrolment Code:', error);
+      return res.status(500).json({ error: 'Failed to issue enrolment code' });
    }
 }
 

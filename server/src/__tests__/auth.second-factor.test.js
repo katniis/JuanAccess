@@ -102,9 +102,10 @@ describe('Staff Second Factor', () => {
             secondFactor: 'setup_required',
          });
          expect(getCookie(res, 'token')).toBeNull();
-         expect(jwt.decode(getCookie(res, 'second_factor')).purpose).toBe(
-            'second_factor_setup',
-         );
+         const pending = jwt.decode(getCookie(res, 'second_factor'));
+         expect(pending.purpose).toBe('second_factor_setup');
+         // The password alone never proves enrolment.
+         expect(pending.enrolmentVerified).toBeUndefined();
       });
 
       it('does not clear earlier failures until the Second Factor passes', async () => {
@@ -330,6 +331,10 @@ describe('Staff Second Factor', () => {
    });
 
    describe('Second Factor setup', () => {
+      // Setup tokens here already passed the Enrolment Code check (see auth.enrolment-code.test.js).
+      const verifiedSetup = () =>
+         pendingCookie('second_factor_setup', { enrolmentVerified: true });
+
       it('returns a QR code and otpauth URI, storing the secret encrypted', async () => {
          mockQueryQueue.push([unenrolledStaff], []);
 
@@ -337,7 +342,7 @@ describe('Staff Second Factor', () => {
             ctx.baseUrl,
             '/auth/second-factor/setup',
             {},
-            { cookie: pendingCookie('second_factor_setup') },
+            { cookie: verifiedSetup() },
          );
 
          expect(res.status).toBe(200);
@@ -391,7 +396,7 @@ describe('Staff Second Factor', () => {
             ctx.baseUrl,
             '/auth/second-factor/setup/confirm',
             { code: 'abcdef' },
-            { cookie: pendingCookie('second_factor_setup') },
+            { cookie: verifiedSetup() },
          );
 
          expect(res.status).toBe(401);
@@ -419,7 +424,7 @@ describe('Staff Second Factor', () => {
             ctx.baseUrl,
             '/auth/second-factor/setup/confirm',
             { code: codeFor(testSecret) },
-            { cookie: pendingCookie('second_factor_setup') },
+            { cookie: verifiedSetup() },
          );
 
          expect(res.status).toBe(200);

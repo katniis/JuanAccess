@@ -36,6 +36,8 @@ This trades a bit of frontend routing/permission logic (conditional nav, protect
 
 Auth: email/password with JWT sessions. Role stored on the `users` table, checked on every protected route (frontend) and every protected endpoint (backend middleware).
 
+Staff also need a Second Factor (see `docs/adr/0001`). Staff who sign in without one must enter an Enrolment Code before setup starts. A staff_admin issues it from Staff Access, and a Second Factor reset also issues one. Invited staff skip the code. Codes expire after 24 hours (`ENROLMENT_CODE_HOURS`). **Bootstrap:** for the first staff_admin, or when no admin can sign in, someone with server access runs `cd server && npm run issue:enrolment-code -- <staff email>`. It prints the code once and refuses non-staff emails.
+
 ---
 
 ## 3. Patient-Side Routes & Content

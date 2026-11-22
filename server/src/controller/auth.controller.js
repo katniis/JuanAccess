@@ -20,9 +20,11 @@ import {
 import { recordAudit } from '../services/audit.service.js';
 import { insertNotification } from '../services/notification.service.js';
 import { recoveryCodes } from '../db/schema/recoveryCodes.js';
+import { enrolmentCodes } from '../db/schema/enrolmentCodes.js';
 import {
    decryptSecret,
    encryptSecret,
+   hashEnrolmentCode,
    hashRecoveryCode,
    newRecoveryCodes,
    newTotpSecret,
@@ -404,7 +406,8 @@ export const acceptStaffInvitation = async (req, res) => {
             .status(409)
             .json({ message: 'Email is already registered.' });
       // No session until the invited staff member finishes Second Factor setup.
-      setPendingCookie(res, result.user, 'second_factor_setup');
+      // The invite link already proved access, so no Enrolment Code is needed.
+      setPendingCookie(res, result.user, 'second_factor_setup', true);
       return res.status(201).json({ secondFactor: 'setup_required' });
    } catch (error) {
       console.error('Invitation acceptance failed:', error);
@@ -470,11 +473,18 @@ const pendingTokenMs = 10 * 60 * 1000;
 const secondFactorCookie = 'second_factor';
 const lockedMessage = 'Account is temporarily locked. Try again later.';
 
-const setPendingCookie = (res, user, purpose) =>
+// enrolmentVerified: setup may start without an Enrolment Code (invite link or a code already used).
+// Never set by the password step alone.
+const setPendingCookie = (res, user, purpose, enrolmentVerified) =>
    res.cookie(
       secondFactorCookie,
       jwt.sign(
-         { id: user.id, authVersion: user.authVersion ?? 0, purpose },
+         {
+            id: user.id,
+            authVersion: user.authVersion ?? 0,
+            purpose,
+            ...(enrolmentVerified && { enrolmentVerified: true }),
+         },
          process.env.JWT_SECRET,
          { expiresIn: '10m' },
       ),
@@ -594,7 +604,27 @@ async function loadPendingUser(req, res, purpose) {
       res.status(423).json({ message: lockedMessage });
       return null;
    }
-   return { user, audit };
+   return { user, audit, enrolmentVerified: claims.enrolmentVerified === true };
+}
+
+const enrolmentMessage = 'Ask a staff admin for an enrolment code.';
+
+// Atomically marks the code used so it can start setup only once.
+async function consumeEnrolmentCode(userId, code) {
+   if (typeof code !== 'string' || !code.trim()) return false;
+   const [used] = await db
+      .update(enrolmentCodes)
+      .set({ usedAt: new Date() })
+      .where(
+         and(
+            eq(enrolmentCodes.userId, userId),
+            eq(enrolmentCodes.codeHash, hashEnrolmentCode(code)),
+            isNull(enrolmentCodes.usedAt),
+            gt(enrolmentCodes.expiresAt, sql`now()`),
+         ),
+      )
+      .returning({ id: enrolmentCodes.id });
+   return Boolean(used);
 }
 
 export const verifySecondFactor = async (req, res) => {
@@ -669,11 +699,20 @@ export const startSecondFactorSetup = async (req, res) => {
    try {
       const pending = await loadPendingUser(req, res, 'second_factor_setup');
       if (!pending) return;
-      const { user } = pending;
+      const { user, audit } = pending;
       if (user.totpEnabledAt) {
          return res
             .status(409)
             .json({ message: 'Second Factor is already set up.' });
+      }
+      if (!pending.enrolmentVerified) {
+         // Missing, wrong, expired and used codes all get the same answer.
+         if (!(await consumeEnrolmentCode(user.id, req.body?.enrolmentCode))) {
+            await recordFailedAttempt(user, audit, 'enrolment_code_failed');
+            return res.status(401).json({ message: enrolmentMessage });
+         }
+         audit('enrolment_code_used');
+         setPendingCookie(res, user, 'second_factor_setup', true);
       }
       const secret = newTotpSecret();
       await db
@@ -704,6 +743,9 @@ export const confirmSecondFactorSetup = async (req, res) => {
          return res
             .status(409)
             .json({ message: 'Second Factor is already set up.' });
+      }
+      if (!pending.enrolmentVerified) {
+         return res.status(401).json({ message: enrolmentMessage });
       }
       if (!user.totpSecretEncrypted) {
          return res

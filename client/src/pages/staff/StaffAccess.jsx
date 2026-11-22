@@ -11,6 +11,7 @@ import {
 import {
    createStaffInvitation,
    getStaffUsers,
+   issueStaffEnrolmentCode,
    resetStaffSecondFactor,
 } from '../../services/staffAdmin.js';
 
@@ -31,6 +32,9 @@ function StaffAccess() {
    const [error, setError] = useState('');
    const [invitation, setInvitation] = useState(null);
    const [resettingId, setResettingId] = useState(null);
+   const [issuingId, setIssuingId] = useState(null);
+   // Shown once: { name, enrolmentCode, expiresAt }.
+   const [enrolment, setEnrolment] = useState(null);
    const [form, setForm] = useState({
       firstName: '',
       lastName: '',
@@ -113,15 +117,46 @@ function StaffAccess() {
          return;
       setResettingId(account.id);
       try {
-         await resetStaffSecondFactor(account.id);
+         const result = await resetStaffSecondFactor(account.id);
+         setEnrolment({ name, ...result });
          notify({
             type: 'success',
-            message: `${name}'s Second Factor was reset. They will set it up at their next sign-in.`,
+            message: `${name}'s Second Factor was reset. Give them the enrolment code to set it up again.`,
          });
       } catch (requestError) {
          notify({ type: 'error', message: requestError.message });
       } finally {
          setResettingId(null);
+      }
+   };
+
+   const issueEnrolmentCode = async (account) => {
+      const name = account.displayName || account.email;
+      setIssuingId(account.id);
+      try {
+         const result = await issueStaffEnrolmentCode(account.id);
+         setEnrolment({ name, ...result });
+         notify({
+            type: 'success',
+            message: `Enrolment code issued for ${name}.`,
+         });
+      } catch (requestError) {
+         notify({ type: 'error', message: requestError.message });
+      } finally {
+         setIssuingId(null);
+      }
+   };
+
+   const copyEnrolmentCode = async () => {
+      try {
+         await navigator.clipboard.writeText(enrolment.enrolmentCode);
+         notify({ type: 'success', message: 'Enrolment code copied.' });
+      } catch {
+         notify({
+            type: 'error',
+            message:
+               'The code could not be copied. Select and copy it manually.',
+         });
       }
    };
 
@@ -268,6 +303,32 @@ function StaffAccess() {
                   </p>
                </div>
             </header>
+            {enrolment && (
+               <section className="staff-invite-result" aria-live="polite">
+                  <div>
+                     <strong>Enrolment code for {enrolment.name}</strong>
+                     <span>Expires {expiryLabel(enrolment.expiresAt)}</span>
+                  </div>
+                  <label>
+                     Enrolment code
+                     <input
+                        readOnly
+                        value={enrolment.enrolmentCode}
+                        onFocus={(event) => event.target.select()}
+                     />
+                  </label>
+                  <button
+                     className="button button-outline"
+                     type="button"
+                     onClick={() => void copyEnrolmentCode()}>
+                     Copy code
+                  </button>
+                  <p>
+                     Shown once. It starts Second Factor setup one time, and
+                     issuing another code cancels this one.
+                  </p>
+               </section>
+            )}
             {users.length ? (
                <div className="staff-table-scroll">
                   <table className="staff-data-table">
@@ -305,6 +366,18 @@ function StaffAccess() {
                                     {resettingId === account.id
                                        ? 'Resetting…'
                                        : 'Reset'}
+                                 </button>{' '}
+                                 <button
+                                    className="button button-outline"
+                                    type="button"
+                                    disabled={issuingId === account.id}
+                                    aria-label={`Issue enrolment code for ${account.displayName || account.email}`}
+                                    onClick={() =>
+                                       void issueEnrolmentCode(account)
+                                    }>
+                                    {issuingId === account.id
+                                       ? 'Issuing…'
+                                       : 'Issue enrolment code'}
                                  </button>
                               </td>
                            </tr>

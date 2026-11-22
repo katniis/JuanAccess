@@ -48,8 +48,12 @@ export function verifySecondFactor(details) {
    return authRequest('second-factor/verify', details);
 }
 
-export function startSecondFactorSetup() {
-   return authRequest('second-factor/setup', {});
+// enrolmentCode is needed after a password-only sign-in; invited staff skip it.
+export function startSecondFactorSetup(enrolmentCode) {
+   return authRequest(
+      'second-factor/setup',
+      enrolmentCode ? { enrolmentCode } : {},
+   );
 }
 
 export function confirmSecondFactorSetup(code) {

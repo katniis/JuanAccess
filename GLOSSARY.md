@@ -52,6 +52,10 @@ _Avoid_: PIN, staff ID code, OTP (when meaning emailed codes)
 A single-use code shown once at Second Factor setup, used to sign in when the authenticator app is lost.
 _Avoid_: Backup PIN
 
+**Enrolment Code**:
+A one-time code a staff_admin issues so a staff member can start Second Factor setup; it expires after 24 hours and issuing a new one cancels the old.
+_Avoid_: Invite code, PIN
+
 ## Cancellations
 
 **Cancellation Reason**:
