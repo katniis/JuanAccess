@@ -53,7 +53,8 @@ function PrivacyConsentPrompt({ onSignOut }) {
             <p id="privacy-consent-description">
                Our Privacy Policy explains how the clinic collects, stores, and
                uses your information, including AI drafting with Google Gemini.
-               Please read it and accept it to keep using JuanAccess.
+               Please read it and accept it to keep using JuanAccess. If you do
+               not agree, you will be signed out.
             </p>
             <Link to="/privacy" target="_blank">
                Read the Privacy Policy
@@ -71,7 +72,7 @@ function PrivacyConsentPrompt({ onSignOut }) {
                {saving ? 'Saving…' : 'I accept'}
             </button>
             <button className="button" type="button" onClick={onSignOut}>
-               Sign out
+               I disagree, sign me out
             </button>
          </div>
       </dialog>
