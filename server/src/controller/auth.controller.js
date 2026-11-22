@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { patients } from '../db/schema/patients.js';
 import { providers } from '../db/schema/providers.js';
@@ -10,11 +10,28 @@ import { userInvitations } from '../db/schema/userInvitations.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
 import { accountActionTokens } from '../db/schema/accountActionTokens.js';
 import { notifications } from '../db/schema/notifications.js';
+import { consentRecords } from '../db/schema/consentRecords.js';
+import { PRIVACY_POLICY_VERSION } from '../utils/privacyPolicy.js';
 import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
 import {
    isEmailDeliveryEnabled,
    sendEmail,
 } from '../services/email.service.js';
+import { recordAudit } from '../services/audit.service.js';
+import { insertNotification } from '../services/notification.service.js';
+import { recoveryCodes } from '../db/schema/recoveryCodes.js';
+import { enrolmentCodes } from '../db/schema/enrolmentCodes.js';
+import {
+   decryptSecret,
+   encryptSecret,
+   hashEnrolmentCode,
+   hashRecoveryCode,
+   newRecoveryCodes,
+   newTotpSecret,
+   totpStep,
+   totpUri,
+} from '../services/second-factor.service.js';
+import QRCode from 'qrcode';
 
 const cookieOptions = {
    httpOnly: true,
@@ -27,7 +44,18 @@ const persistentCookieOptions = {
    maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
-const generateToken = (id, authVersion = 0, rememberMe = false) => {
+const staffSessionMs = 12 * 60 * 60 * 1000;
+const isStaffRole = (role) => role === 'staff' || role === 'staff_admin';
+const maxFailedLogins = 5;
+const lockoutMs = 15 * 60 * 1000;
+const loginRequestsPerWindow = 20;
+
+const generateToken = (
+   id,
+   authVersion = 0,
+   rememberMe = false,
+   expiresIn = '30d',
+) => {
    if (!process.env.JWT_SECRET) {
       throw new Error(
          'JWT_SECRET is required to create authentication tokens.',
@@ -35,11 +63,14 @@ const generateToken = (id, authVersion = 0, rememberMe = false) => {
    }
 
    return jwt.sign({ id, authVersion, rememberMe }, process.env.JWT_SECRET, {
-      expiresIn: '30d',
+      expiresIn,
    });
 };
 
 const passwordRounds = 10;
+
+const genders = ['female', 'male', 'nonbinary', 'other', 'prefer_not_to_say'];
+const sexesAtBirth = ['female', 'male'];
 
 const findUserByEmail = async (email) => {
    const [user] = await db
@@ -69,6 +100,7 @@ export const patientRegister = async (req, res) => {
          last_name: lastName,
          date_of_birth: dateOfBirth,
          gender,
+         sex_at_birth: sexAtBirth,
          contact_phone: contactPhone,
          address,
          insurer_name: insurerName,
@@ -77,13 +109,24 @@ export const patientRegister = async (req, res) => {
          member_id: memberId,
          coverage_start: coverageStart,
          coverage_end: coverageEnd,
+         privacy_consent: privacyConsent,
       } = req.body ?? {};
 
       if (!email || !password || !firstName || !lastName || !dateOfBirth) {
          return res.status(400).json({ message: 'Missing required fields.' });
       }
+      if (privacyConsent !== true) {
+         return res.status(400).json({
+            message: 'You must accept the Privacy Policy to register.',
+         });
+      }
       if (!isValidDate(dateOfBirth)) {
          return res.status(400).json({ message: 'Invalid date of birth.' });
+      }
+      if (!genders.includes(gender) || !sexesAtBirth.includes(sexAtBirth)) {
+         return res
+            .status(400)
+            .json({ message: 'Gender and Sex at Birth are required.' });
       }
 
       const hasInsurance = [
@@ -124,6 +167,7 @@ export const patientRegister = async (req, res) => {
                lastName,
                dateOfBirth,
                gender,
+               sexAtBirth,
                contactEmail: email,
                contactPhone,
                address,
@@ -164,6 +208,10 @@ export const patientRegister = async (req, res) => {
                displayName: users.displayName,
             });
 
+         await tx
+            .insert(consentRecords)
+            .values({ userId: user.id, policyVersion: PRIVACY_POLICY_VERSION });
+
          return { patient, user };
       });
 
@@ -175,6 +223,50 @@ export const patientRegister = async (req, res) => {
       });
    } catch (error) {
       console.error('Patient registration failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+const consentStatus = (required) => ({
+   required,
+   currentVersion: PRIVACY_POLICY_VERSION,
+});
+
+// Only patients give Privacy Policy consent; staff get the plain user.
+export const getMe = async (req, res) => {
+   if (req.user.role !== 'patient') return res.json({ user: req.user });
+   try {
+      const [record] = await db
+         .select({ id: consentRecords.id })
+         .from(consentRecords)
+         .where(
+            and(
+               eq(consentRecords.userId, req.user.id),
+               eq(consentRecords.policyVersion, PRIVACY_POLICY_VERSION),
+            ),
+         )
+         .limit(1);
+      return res.json({ user: req.user, consent: consentStatus(!record) });
+   } catch (error) {
+      console.error('Consent lookup failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const acceptPrivacyPolicy = async (req, res) => {
+   if (req.user.role !== 'patient') {
+      return res
+         .status(403)
+         .json({ message: 'Only patients give Privacy Policy consent.' });
+   }
+   try {
+      await db.insert(consentRecords).values({
+         userId: req.user.id,
+         policyVersion: PRIVACY_POLICY_VERSION,
+      });
+      return res.status(201).json({ consent: consentStatus(false) });
+   } catch (error) {
+      console.error('Consent recording failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };
@@ -245,7 +337,7 @@ export const providerRegister = async (req, res) => {
          return { provider, user };
       });
 
-      res.cookie('token', generateToken(result.user.id), cookieOptions);
+      // No cookie: the new staff member sets up their Second Factor at first login.
       return res.status(201).json({
          message: 'User and provider registered successfully.',
          user: result.user,
@@ -313,8 +405,10 @@ export const acceptStaffInvitation = async (req, res) => {
          return res
             .status(409)
             .json({ message: 'Email is already registered.' });
-      res.cookie('token', generateToken(result.user.id), cookieOptions);
-      return res.status(201).json({ user: safeUser(result.user) });
+      // No session until the invited staff member finishes Second Factor setup.
+      // The invite link already proved access, so no Enrolment Code is needed.
+      setPendingCookie(res, result.user, 'second_factor_setup', true);
+      return res.status(201).json({ secondFactor: 'setup_required' });
    } catch (error) {
       console.error('Invitation acceptance failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
@@ -323,6 +417,12 @@ export const acceptStaffInvitation = async (req, res) => {
 
 export const login = async (req, res) => {
    try {
+      if (!allowActionRequest(req, 'login', loginRequestsPerWindow)) {
+         return res
+            .status(429)
+            .json({ message: 'Too many login attempts. Try again later.' });
+      }
+
       const { email, password, rememberMe = false } = req.body ?? {};
       if (!email || !password) {
          return res
@@ -331,19 +431,379 @@ export const login = async (req, res) => {
       }
 
       const user = await findUserByEmail(email);
-      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      // shortcut: unknown emails are not audited (audit_log.entity_id is NOT NULL).
+      if (!user) {
          return res.status(401).json({ message: 'Invalid credentials.' });
       }
 
-      const shouldRemember = rememberMe === true;
-      res.cookie(
-         'token',
-         generateToken(user.id, user.authVersion ?? 0, shouldRemember),
-         shouldRemember ? persistentCookieOptions : cookieOptions,
-      );
+      const audit = auditFor(req, user);
+
+      if (isLocked(user)) {
+         audit('login_locked');
+         return res.status(423).json({ message: lockedMessage });
+      }
+
+      if (!(await bcrypt.compare(password, user.passwordHash))) {
+         await recordFailedAttempt(user, audit, 'login_failed');
+         return res.status(401).json({ message: 'Invalid credentials.' });
+      }
+
+      // Staff get a short-lived pending token; the session waits for the Second Factor.
+      if (isStaffRole(user.role)) {
+         const enrolled = Boolean(
+            user.totpEnabledAt && user.totpSecretEncrypted,
+         );
+         const purpose = enrolled ? 'second_factor' : 'second_factor_setup';
+         setPendingCookie(res, user, purpose);
+         audit('login_password_verified', { purpose });
+         return res.json({
+            secondFactor: enrolled ? 'required' : 'setup_required',
+         });
+      }
+
+      await startSession(res, user, audit, { rememberMe: rememberMe === true });
       return res.json({ user: safeUser(user) });
    } catch (error) {
       console.error('Login failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+const pendingTokenMs = 10 * 60 * 1000;
+const secondFactorCookie = 'second_factor';
+const lockedMessage = 'Account is temporarily locked. Try again later.';
+
+// enrolmentVerified: setup may start without an Enrolment Code (invite link or a code already used).
+// Never set by the password step alone.
+const setPendingCookie = (res, user, purpose, enrolmentVerified) =>
+   res.cookie(
+      secondFactorCookie,
+      jwt.sign(
+         {
+            id: user.id,
+            authVersion: user.authVersion ?? 0,
+            purpose,
+            ...(enrolmentVerified && { enrolmentVerified: true }),
+         },
+         process.env.JWT_SECRET,
+         { expiresIn: '10m' },
+      ),
+      { ...cookieOptions, maxAge: pendingTokenMs },
+   );
+
+const isLocked = (user) =>
+   Boolean(user.lockedUntil && new Date(user.lockedUntil) > new Date());
+
+const auditFor = (req, user) => (action, newValue) =>
+   void recordAudit({
+      entityType: 'user',
+      entityId: user.id,
+      action,
+      changedBy: user.id,
+      newValue: { ip: req.ip, ...newValue },
+   });
+
+// Wrong passwords and wrong Second Factor codes share one per-account lockout counter.
+// Incremented in SQL so concurrent failures cannot overwrite each other's count.
+async function recordFailedAttempt(user, audit, failAction, detail = {}) {
+   const [row] = await db
+      .update(users)
+      .set({ failedLoginAttempts: sql`${users.failedLoginAttempts} + 1` })
+      .where(eq(users.id, user.id))
+      .returning({ attempts: users.failedLoginAttempts });
+   const attempts = row?.attempts ?? 0;
+   const lock = attempts >= maxFailedLogins;
+   if (lock) {
+      await db
+         .update(users)
+         .set({
+            failedLoginAttempts: 0,
+            lockedUntil: new Date(Date.now() + lockoutMs),
+         })
+         .where(eq(users.id, user.id));
+   }
+   audit(lock ? 'login_lockout' : failAction, { attempts, ...detail });
+}
+
+async function startSession(res, user, audit, { rememberMe = false, method }) {
+   if (user.failedLoginAttempts || user.lockedUntil) {
+      await db
+         .update(users)
+         .set({ failedLoginAttempts: 0, lockedUntil: null })
+         .where(eq(users.id, user.id));
+   }
+
+   const isStaff = isStaffRole(user.role);
+   if (isStaff) {
+      await insertNotification(db, {
+         userId: user.id,
+         type: 'new_login',
+         message: `New sign-in to your staff account at ${new Date().toISOString()}.`,
+         emailEnabled: false,
+      });
+   }
+   audit('login_success', method ? { method } : undefined);
+
+   res.cookie(
+      'token',
+      generateToken(
+         user.id,
+         user.authVersion ?? 0,
+         rememberMe,
+         isStaff ? '12h' : '30d',
+      ),
+      isStaff
+         ? { ...cookieOptions, maxAge: staffSessionMs }
+         : rememberMe
+           ? persistentCookieOptions
+           : cookieOptions,
+   );
+}
+
+const clearSecondFactorCookie = (res) =>
+   res.clearCookie(secondFactorCookie, cookieOptions);
+
+async function loadPendingUser(req, res, purpose) {
+   if (!allowActionRequest(req, 'second-factor', loginRequestsPerWindow)) {
+      res.status(429).json({
+         message: 'Too many attempts. Try again later.',
+      });
+      return null;
+   }
+   let claims = null;
+   try {
+      claims = jwt.verify(
+         req.cookies?.[secondFactorCookie],
+         process.env.JWT_SECRET,
+      );
+   } catch {
+      // Missing, expired or tampered pending tokens all mean "sign in again".
+   }
+   const signInAgain = () =>
+      res.status(401).json({ message: 'Sign in again to continue.' });
+   if (claims?.purpose !== purpose || typeof claims.id !== 'number') {
+      signInAgain();
+      return null;
+   }
+   const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, claims.id), eq(users.isActive, true)))
+      .limit(1);
+   if (
+      !user ||
+      !isStaffRole(user.role) ||
+      (user.authVersion ?? 0) !== (claims.authVersion ?? 0)
+   ) {
+      signInAgain();
+      return null;
+   }
+   const audit = auditFor(req, user);
+   if (isLocked(user)) {
+      audit('login_locked');
+      res.status(423).json({ message: lockedMessage });
+      return null;
+   }
+   return { user, audit, enrolmentVerified: claims.enrolmentVerified === true };
+}
+
+const enrolmentMessage = 'Ask a staff admin for an enrolment code.';
+
+// Atomically marks the code used so it can start setup only once.
+async function consumeEnrolmentCode(userId, code) {
+   if (typeof code !== 'string' || !code.trim()) return false;
+   const [used] = await db
+      .update(enrolmentCodes)
+      .set({ usedAt: new Date() })
+      .where(
+         and(
+            eq(enrolmentCodes.userId, userId),
+            eq(enrolmentCodes.codeHash, hashEnrolmentCode(code)),
+            isNull(enrolmentCodes.usedAt),
+            gt(enrolmentCodes.expiresAt, sql`now()`),
+         ),
+      )
+      .returning({ id: enrolmentCodes.id });
+   return Boolean(used);
+}
+
+export const verifySecondFactor = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor');
+      if (!pending) return;
+      const { user, audit } = pending;
+      if (!user.totpEnabledAt || !user.totpSecretEncrypted) {
+         return res.status(401).json({ message: 'Sign in again to continue.' });
+      }
+
+      const { code, recoveryCode } = req.body ?? {};
+      const method =
+         typeof recoveryCode === 'string' && recoveryCode.trim()
+            ? 'recovery_code'
+            : 'totp';
+      let valid;
+      if (method === 'recovery_code') {
+         const [used] = await db
+            .update(recoveryCodes)
+            .set({ usedAt: new Date() })
+            .where(
+               and(
+                  eq(recoveryCodes.userId, user.id),
+                  eq(recoveryCodes.codeHash, hashRecoveryCode(recoveryCode)),
+                  isNull(recoveryCodes.usedAt),
+               ),
+            )
+            .returning({ id: recoveryCodes.id });
+         valid = Boolean(used);
+      } else {
+         const step = totpStep(decryptSecret(user.totpSecretEncrypted), code);
+         // Claim the step atomically so a code can sign in only once.
+         const lastStep = user.totpLastUsedStep ?? null;
+         if (step !== null && (lastStep === null || step > lastStep)) {
+            const [claimed] = await db
+               .update(users)
+               .set({ totpLastUsedStep: step })
+               .where(
+                  and(
+                     eq(users.id, user.id),
+                     or(
+                        isNull(users.totpLastUsedStep),
+                        lt(users.totpLastUsedStep, step),
+                     ),
+                  ),
+               )
+               .returning({ id: users.id });
+            valid = Boolean(claimed);
+         } else {
+            valid = false;
+         }
+      }
+
+      if (!valid) {
+         await recordFailedAttempt(user, audit, 'second_factor_failed', {
+            method,
+         });
+         return res.status(401).json({ message: 'Invalid code.' });
+      }
+
+      clearSecondFactorCookie(res);
+      await startSession(res, user, audit, { method });
+      return res.json({ user: safeUser(user) });
+   } catch (error) {
+      console.error('Second Factor verification failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const startSecondFactorSetup = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor_setup');
+      if (!pending) return;
+      const { user, audit } = pending;
+      if (user.totpEnabledAt) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      if (!pending.enrolmentVerified) {
+         // Missing, wrong, expired and used codes all get the same answer.
+         if (!(await consumeEnrolmentCode(user.id, req.body?.enrolmentCode))) {
+            await recordFailedAttempt(user, audit, 'enrolment_code_failed');
+            return res.status(401).json({ message: enrolmentMessage });
+         }
+         audit('enrolment_code_used');
+         setPendingCookie(res, user, 'second_factor_setup', true);
+      }
+      const secret = newTotpSecret();
+      await db
+         .update(users)
+         .set({
+            totpSecretEncrypted: encryptSecret(secret),
+            totpEnabledAt: null,
+         })
+         .where(eq(users.id, user.id));
+      const otpauthUrl = totpUri(secret, user.email);
+      return res.json({
+         otpauthUrl,
+         qrCodeDataUrl: await QRCode.toDataURL(otpauthUrl),
+         secret,
+      });
+   } catch (error) {
+      console.error('Second Factor setup failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const confirmSecondFactorSetup = async (req, res) => {
+   try {
+      const pending = await loadPendingUser(req, res, 'second_factor_setup');
+      if (!pending) return;
+      const { user, audit } = pending;
+      if (user.totpEnabledAt) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      if (!pending.enrolmentVerified) {
+         return res.status(401).json({ message: enrolmentMessage });
+      }
+      if (!user.totpSecretEncrypted) {
+         return res
+            .status(400)
+            .json({ message: 'Start Second Factor setup first.' });
+      }
+      const step = totpStep(
+         decryptSecret(user.totpSecretEncrypted),
+         req.body?.code,
+      );
+      if (step === null) {
+         await recordFailedAttempt(user, audit, 'second_factor_failed', {
+            method: 'setup',
+         });
+         return res.status(401).json({ message: 'Invalid code.' });
+      }
+
+      const codes = newRecoveryCodes();
+      const activated = await db.transaction(async (tx) => {
+         const [row] = await tx
+            .update(users)
+            .set({
+               totpEnabledAt: new Date(),
+               totpLastUsedStep: step,
+               failedLoginAttempts: 0,
+               lockedUntil: null,
+            })
+            .where(and(eq(users.id, user.id), isNull(users.totpEnabledAt)))
+            .returning({ id: users.id });
+         if (!row) return false;
+         await tx
+            .delete(recoveryCodes)
+            .where(eq(recoveryCodes.userId, user.id));
+         await tx.insert(recoveryCodes).values(
+            codes.map((code) => ({
+               userId: user.id,
+               codeHash: hashRecoveryCode(code),
+            })),
+         );
+         return true;
+      });
+      if (!activated) {
+         return res
+            .status(409)
+            .json({ message: 'Second Factor is already set up.' });
+      }
+      audit('second_factor_enrolled');
+
+      clearSecondFactorCookie(res);
+      await startSession(
+         res,
+         { ...user, failedLoginAttempts: 0, lockedUntil: null },
+         audit,
+         { method: 'totp' },
+      );
+      return res.json({ user: safeUser(user), recoveryCodes: codes });
+   } catch (error) {
+      console.error('Second Factor setup confirmation failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };
@@ -357,6 +817,7 @@ const settingsColumns = {
    lastName: patients.lastName,
    dateOfBirth: patients.dateOfBirth,
    gender: patients.gender,
+   sexAtBirth: patients.sexAtBirth,
    contactPhone: patients.contactPhone,
    address: patients.address,
 };
@@ -375,6 +836,7 @@ async function loadSettings(userId) {
       lastName,
       dateOfBirth,
       gender,
+      sexAtBirth,
       contactPhone,
       address,
       ...account
@@ -389,6 +851,7 @@ async function loadSettings(userId) {
                  lastName,
                  dateOfBirth,
                  gender,
+                 sexAtBirth,
                  contactPhone,
                  address,
               }
@@ -436,6 +899,7 @@ export const patchSettings = async (req, res) => {
       'firstName',
       'lastName',
       'gender',
+      'sexAtBirth',
       'contactPhone',
       'address',
    ];
@@ -458,14 +922,23 @@ export const patchSettings = async (req, res) => {
    const patientValues = {};
    for (const field of patientFields) {
       if (body[field] === undefined) continue;
+      if (field === 'gender' || field === 'sexAtBirth') {
+         // Optional to send (existing patients aren't blocked), but never cleared.
+         if (
+            !(field === 'gender' ? genders : sexesAtBirth).includes(body[field])
+         )
+            return res
+               .status(400)
+               .json({ error: 'Profile details are invalid.' });
+         patientValues[field] = body[field];
+         continue;
+      }
       const maxLength =
          field === 'firstName' || field === 'lastName'
             ? 100
-            : field === 'gender'
-              ? 20
-              : field === 'contactPhone'
-                ? 30
-                : 1000;
+            : field === 'contactPhone'
+              ? 30
+              : 1000;
       const value = body[field];
       if (typeof value !== 'string' || value.trim().length > maxLength) {
          return res.status(400).json({ error: 'Profile details are invalid.' });
@@ -586,11 +1059,21 @@ export const changePassword = async (req, res) => {
          .where(eq(users.id, req.user.id))
          .returning({ authVersion: users.authVersion });
       const authVersion = updated?.authVersion ?? (user.authVersion ?? 0) + 1;
-      const rememberMe = req.auth?.rememberMe === true;
+      const isStaff = isStaffRole(req.user.role);
+      const rememberMe = !isStaff && req.auth?.rememberMe === true;
       res.cookie(
          'token',
-         generateToken(req.user.id, authVersion, rememberMe),
-         rememberMe ? persistentCookieOptions : cookieOptions,
+         generateToken(
+            req.user.id,
+            authVersion,
+            rememberMe,
+            isStaff ? '12h' : '30d',
+         ),
+         isStaff
+            ? { ...cookieOptions, maxAge: staffSessionMs }
+            : rememberMe
+              ? persistentCookieOptions
+              : cookieOptions,
       );
       return res.json({ message: 'Password changed successfully.' });
    } catch (error) {

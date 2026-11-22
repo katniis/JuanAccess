@@ -138,8 +138,11 @@ export function mapPatientAppointment(appointment) {
       id: appointment.id,
       providerName: appointment.providerFirst
          ? 'Dr. ' + appointment.providerFirst + ' ' + appointment.providerLast
-         : 'Provider',
-      visitType: appointment.visitTypeName || 'Appointment',
+         : 'Assigned on the day',
+      visitType: appointment.apePackageId
+         ? `APE · ${appointment.apePackageName || 'APE Package'}`
+         : appointment.visitTypeName || 'Appointment',
+      isApe: Boolean(appointment.apePackageId),
       scheduledStart: appointment.scheduledStart,
       scheduledEnd: appointment.scheduledEnd,
       status: appointment.status,
@@ -155,9 +158,11 @@ export function mapPatientAppointment(appointment) {
               day: 'numeric',
            }).format(start)
          : '—',
-      timeLabel: hasValidStart
-         ? formatClinicTime(appointment.scheduledStart)
-         : 'Time unavailable',
+      timeLabel: !hasValidStart
+         ? 'Time unavailable'
+         : appointment.apePackageId
+           ? `Arrive ${formatClinicTime(appointment.scheduledStart)} – ${formatClinicTime(appointment.scheduledEnd)}`
+           : formatClinicTime(appointment.scheduledStart),
       insuranceStatus: insurance.pill,
       insuranceLabel: insurance.label,
       insuranceDescription: insurance.description,
@@ -167,6 +172,25 @@ export function mapPatientAppointment(appointment) {
    };
 }
 
-export function cancelPatientAppointment(id) {
-   return patientRequest('/appointment/' + id, { method: 'DELETE' });
+export const PATIENT_CANCELLATION_REASONS = [
+   { value: 'schedule_conflict', label: 'Schedule conflict' },
+   { value: 'feeling_better', label: 'Feeling better' },
+   { value: 'cost', label: 'Cost' },
+   { value: 'found_another_clinic', label: 'Found another clinic' },
+   { value: 'transport', label: 'Transport' },
+   { value: 'other', label: 'Other' },
+];
+
+export function cancelPatientAppointment(id, { reason, reasonText, letter }) {
+   return patientRequest('/appointment/' + id, {
+      method: 'DELETE',
+      body: { reason, reasonText, letter },
+   });
+}
+
+export function draftPatientCancellationLetter(id, { reason, reasonText }) {
+   return patientRequest(
+      `/appointment/${encodeURIComponent(id)}/cancellation-letter/draft`,
+      { method: 'POST', body: { reason, reasonText } },
+   );
 }

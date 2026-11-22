@@ -5,11 +5,16 @@ process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.DATABASE_URL ??= 'postgres://localhost:5432/test_db';
 process.env.NODE_ENV = 'test';
 process.env.CLIENT_ORIGIN ??= 'http://localhost:5173';
+process.env.TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 
 export const mockQueryQueue = [];
 export const mockSendEmail = jest.fn().mockResolvedValue({ id: 'email-test' });
 export const mockMutationLog = [];
 export const mockResendConfig = { configured: false };
+// Column keys of each db.select({...}) call, in order.
+export const mockSelectLog = [];
+// Conditions passed to each .where(...) call, in order (render with PgDialect).
+export const mockWhereLog = [];
 
 jest.unstable_mockModule(
    '../services/email.service.js',
@@ -27,9 +32,13 @@ jest.unstable_mockModule('../db/index.js', () => {
    const make = (value) => {
       const node = {
          from: () => make(value),
-         where: () => make(value),
+         where: (condition) => {
+            mockWhereLog.push(condition);
+            return make(value);
+         },
          limit: () => make(value),
          orderBy: () => make(value),
+         for: () => make(value),
          innerJoin: () => make(value),
          leftJoin: () => make(value),
          values: (values) => {
@@ -65,8 +74,13 @@ jest.unstable_mockModule('../db/index.js', () => {
       return node;
    };
 
+   const select = (fields) => {
+      mockSelectLog.push(Object.keys(fields ?? {}));
+      return make(take());
+   };
+
    const tx = {
-      select: () => make(take()),
+      select,
       insert: () => make(take()),
       update: () => make(take()),
       delete: () => make(take()),
@@ -74,7 +88,7 @@ jest.unstable_mockModule('../db/index.js', () => {
 
    return {
       db: {
-         select: () => make(take()),
+         select,
          insert: () => make(take()),
          update: () => make(take()),
          delete: () => make(take()),
@@ -119,6 +133,8 @@ export const getCookie = (res, name) => {
 export const resetMocks = () => {
    mockQueryQueue.length = 0;
    mockMutationLog.length = 0;
+   mockSelectLog.length = 0;
+   mockWhereLog.length = 0;
    mockResendConfig.configured = false;
    mockSendEmail.mockReset().mockResolvedValue({ id: 'email-test' });
 };

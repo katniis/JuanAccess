@@ -53,10 +53,13 @@ function AuthProvider({ children }) {
    };
 
    const signIn = async (credentials) => {
+      // Staff get { secondFactor } and no user until the Second Factor step completes.
       const result = await signInRequest(credentials);
-      setUser(result.user);
-      setAuthError(null);
-      return result.user;
+      if (result.user) {
+         setUser(result.user);
+         setAuthError(null);
+      }
+      return result;
    };
 
    const refreshUser = async () => {

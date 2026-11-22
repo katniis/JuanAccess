@@ -33,7 +33,14 @@ import {
    listFeeSchedule,
    recordProcedure,
 } from '../services/billing.service.js';
-import { manilaDateBounds } from '../utils/timezone.js';
+import { manilaDateBounds, manilaDateString } from '../utils/timezone.js';
+import { parseCancellationReason } from '../utils/cancellationReasons.js';
+import { parseCancellationLetter } from '../services/cancellation-letter.service.js';
+import { getCancellationReport } from '../services/cancellation-report.service.js';
+import {
+   isOnDuty,
+   listDutyOverrides,
+} from '../services/duty-schedule.service.js';
 import { generateGeminiDraft } from '../services/gemini.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { notifyPatient } from '../services/notification.service.js';
@@ -86,6 +93,88 @@ export const getDoctorScheduleHandler = async (req, res) => {
    } catch (error) {
       console.error('Failed to fetch doctor schedule:', error);
       return res.status(500).json({ error: 'Failed to fetch doctor schedule' });
+   }
+};
+
+export const getPractitionerOnDuty = async (req, res) => {
+   const practitionerId = Number(req.params.id);
+   const at = new Date(req.query.at);
+   if (
+      !Number.isInteger(practitionerId) ||
+      practitionerId < 1 ||
+      !req.query.at ||
+      Number.isNaN(at.getTime())
+   ) {
+      return res
+         .status(400)
+         .json({ error: 'A valid practitioner ID and at time are required' });
+   }
+   try {
+      return res.json({ onDuty: await isOnDuty(practitionerId, at) });
+   } catch (error) {
+      console.error('Failed to check duty schedule:', error);
+      return res.status(500).json({ error: 'Failed to check duty schedule' });
+   }
+};
+
+export const getPractitionerDutyOverrides = async (req, res) => {
+   const practitionerId = Number(req.params.id);
+   if (!Number.isInteger(practitionerId) || practitionerId < 1) {
+      return res.status(400).json({ error: 'Invalid practitioner ID' });
+   }
+   try {
+      return res.json({ overrides: await listDutyOverrides(practitionerId) });
+   } catch (error) {
+      console.error('Failed to list duty overrides:', error);
+      return res.status(500).json({ error: 'Failed to list duty overrides' });
+   }
+};
+
+const parseManilaDay = (value) => {
+   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+   const bounds = manilaDateBounds(value);
+   // Rejects impossible dates like 2026-13-40 that Date.UTC would roll over.
+   return manilaDateString(bounds.startOfDay) === value ? bounds : null;
+};
+
+const parseOptionalId = (value) => {
+   if (value === undefined || value === '') return { id: undefined };
+   const id = Number(value);
+   return Number.isInteger(id) && id > 0 ? { id } : { error: true };
+};
+
+export const getCancellationReportHandler = async (req, res) => {
+   const { from, to, visitTypeId, practitionerId } = req.query;
+   const fromDay = from ? parseManilaDay(from) : undefined;
+   const toDay = to ? parseManilaDay(to) : undefined;
+   if (fromDay === null || toDay === null) {
+      return res.status(400).json({ error: 'Dates must be YYYY-MM-DD' });
+   }
+   if (fromDay && toDay && fromDay.startOfDay > toDay.startOfDay) {
+      return res.status(400).json({ error: 'Start date is after end date' });
+   }
+   const visitType = parseOptionalId(visitTypeId);
+   const practitioner = parseOptionalId(practitionerId);
+   if (visitType.error || practitioner.error) {
+      return res
+         .status(400)
+         .json({ error: 'Invalid visit type or practitioner' });
+   }
+
+   const filters = {
+      from: fromDay?.startOfDay,
+      to: toDay?.endOfDay,
+      visitTypeId: visitType.id,
+      practitionerId: practitioner.id,
+   };
+   try {
+      const report = await getCancellationReport(filters);
+      return res.json({ filters, ...report });
+   } catch (error) {
+      console.error('Failed to build cancellation report:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to build cancellation report' });
    }
 };
 
@@ -249,8 +338,21 @@ export const cancelAppointmentStaff = async (req, res) => {
       return res.status(400).json({ error: 'Invalid appointment ID' });
    }
 
+   const { error, reason, reasonText } = parseCancellationReason(
+      req.user.role,
+      req.body,
+   );
+   if (error) {
+      return res.status(400).json({ error });
+   }
+
    try {
-      const result = await staffCancelAppointment(appointmentId, req.user.id);
+      const result = await staffCancelAppointment(appointmentId, {
+         userId: req.user.id,
+         reason,
+         reasonText,
+         letter: parseCancellationLetter(req.body?.letter),
+      });
       if (!result) {
          return res
             .status(404)
@@ -322,6 +424,12 @@ export const rescheduleAppointmentStaff = async (req, res) => {
          });
       }
 
+      if (result.error === 'ape_booking') {
+         return res.status(409).json({
+            error: 'An APE Booking cannot be rescheduled here. Cancel it and rebook the patient into another Arrival Window; Practitioners are assigned per Procedure through Station Assignment.',
+         });
+      }
+
       if (result.error === 'conflict') {
          return res.status(409).json({
             error: `Scheduling conflict: ${result.conflictType} is already booked at the requested time`,
@@ -380,7 +488,7 @@ export const getPriorAuthQueue = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             sql`LATERAL (
@@ -463,7 +571,7 @@ export const getPriorAuthDetail = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .where(eq(priorAuthorizations.id, authId))
          .limit(1);
@@ -830,7 +938,7 @@ export const getAppealsQueue = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             clinicalGuidelines,
@@ -897,7 +1005,7 @@ export const getAppealDetail = async (req, res) => {
             eq(appointments.id, priorAuthorizations.appointmentId),
          )
          .innerJoin(patients, eq(patients.id, appointments.patientId))
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             clinicalGuidelines,

@@ -1,7 +1,22 @@
-import { and, asc, desc, eq, gt, lt, ne, or } from 'drizzle-orm';
+import {
+   and,
+   asc,
+   desc,
+   eq,
+   gt,
+   gte,
+   inArray,
+   lt,
+   lte,
+   ne,
+   or,
+} from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
+   apePackages,
    appointments,
+   arrivalWindows,
+   dutyScheduleOverrides,
    equipment,
    preVisitSummaries,
    providerAvailability,
@@ -11,18 +26,38 @@ import {
    visitTypes,
    waitlistEntries,
 } from '../db/schema/index.js';
+import { APE_VISIT_TYPE_NAME } from './ape-booking.controller.js';
 import { offerNextWaitlistEntry } from '../services/waitlist.service.js';
+import {
+   dutyWindowsOn,
+   effectiveDutyWindows,
+} from '../services/duty-schedule.service.js';
+import {
+   manilaDateBounds,
+   manilaDateString,
+   manilaDayOfWeek,
+   manilaMinutesOfDay,
+} from '../utils/timezone.js';
 import { getCoverageStatusForAppointment } from '../services/insurance.service.js';
 import { createPriorAuthorizationForAppointment } from '../services/prior-auth.service.js';
 import { notifyPatient } from '../services/notification.service.js';
 import { generatePriorAuthDraft } from '../services/prior-auth-draft.service.js';
+import { parseCancellationReason } from '../utils/cancellationReasons.js';
+import {
+   draftCancellationLetter,
+   parseCancellationLetter,
+} from '../services/cancellation-letter.service.js';
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
 
 export const getAllVisitTypes = async (req, res) => {
    try {
-      const types = await db.select().from(visitTypes);
+      // APE Bookings go through /appointment/ape, not the slot booking flow.
+      const types = await db
+         .select()
+         .from(visitTypes)
+         .where(ne(visitTypes.name, APE_VISIT_TYPE_NAME));
       return res.status(200).json({ visitTypes: types });
    } catch (error) {
       console.error('Failed to fetch visit types:', error);
@@ -119,18 +154,21 @@ export const getAvailableSlots = async (req, res) => {
             endTime: providerAvailability.endTime,
          })
          .from(providers)
-         .innerJoin(
+         // Left join: custom-hours overrides can open a day with no weekly hours.
+         .leftJoin(
             providerAvailability,
             eq(providerAvailability.providerId, providers.id),
          );
-      const eligibleProviders = await (requiredSpecialty
-         ? providerQuery.where(
-              and(
-                 eq(providers.isActive, true),
-                 eq(providers.specialty, requiredSpecialty),
-              ),
-           )
-         : providerQuery.where(eq(providers.isActive, true)));
+      // Consults are booked only with physicians (other Professions staff APE stations).
+      const eligibleProviders = await providerQuery.where(
+         and(
+            eq(providers.isActive, true),
+            eq(providers.profession, 'physician'),
+            requiredSpecialty
+               ? eq(providers.specialty, requiredSpecialty)
+               : undefined,
+         ),
+      );
 
       const busy = await db
          .select({
@@ -172,9 +210,38 @@ export const getAvailableSlots = async (req, res) => {
          roomIds = availableRooms.map((room) => room.id);
       }
 
+      const providerIds = [
+         ...new Set(eligibleProviders.map((row) => row.providerId)),
+      ];
+      const overrides = providerIds.length
+         ? await db
+              .select({
+                 providerId: dutyScheduleOverrides.providerId,
+                 overrideDate: dutyScheduleOverrides.overrideDate,
+                 isDayOff: dutyScheduleOverrides.isDayOff,
+                 startTime: dutyScheduleOverrides.startTime,
+                 endTime: dutyScheduleOverrides.endTime,
+              })
+              .from(dutyScheduleOverrides)
+              .where(
+                 and(
+                    inArray(dutyScheduleOverrides.providerId, providerIds),
+                    gte(
+                       dutyScheduleOverrides.overrideDate,
+                       manilaDateString(start),
+                    ),
+                    lte(
+                       dutyScheduleOverrides.overrideDate,
+                       manilaDateString(end),
+                    ),
+                 ),
+              )
+         : [];
+
       const slots = findAvailableSlots(
          visitType,
          eligibleProviders,
+         overrides,
          busy,
          roomIds,
          req.user.patientId,
@@ -231,7 +298,7 @@ export const createAppointment = async (req, res) => {
       Number.isNaN(endDate.getTime()) ||
       startDate >= endDate ||
       startDate <= new Date() ||
-      startDate.toDateString() !== endDate.toDateString()
+      manilaDateString(startDate) !== manilaDateString(endDate)
    ) {
       return res.status(400).json({
          error: 'Valid visit_type_id, provider_id, start, and end are required',
@@ -249,6 +316,9 @@ export const createAppointment = async (req, res) => {
             if (!visitType) {
                return { error: 'Visit type not found', status: 404 };
             }
+            if (visitType.name === APE_VISIT_TYPE_NAME) {
+               return { error: 'Book an APE through APE booking', status: 400 };
+            }
             const requiredSpecialty = normalizeSpecialty(
                visitType.requiredSpecialty,
             );
@@ -262,18 +332,14 @@ export const createAppointment = async (req, res) => {
             const [provider] = await tx
                .select({ id: providers.id })
                .from(providers)
-               .innerJoin(
-                  providerAvailability,
-                  eq(providerAvailability.providerId, providers.id),
-               )
                .where(
                   and(
                      eq(providers.id, Number(providerId)),
                      eq(providers.isActive, true),
+                     eq(providers.profession, 'physician'),
                      requiredSpecialty
                         ? eq(providers.specialty, requiredSpecialty)
                         : undefined,
-                     eq(providerAvailability.dayOfWeek, startDate.getDay()),
                   ),
                )
                .limit(1);
@@ -284,21 +350,14 @@ export const createAppointment = async (req, res) => {
                };
             }
 
-            const availability = await tx
-               .select({
-                  startTime: providerAvailability.startTime,
-                  endTime: providerAvailability.endTime,
-               })
-               .from(providerAvailability)
-               .where(
-                  and(
-                     eq(providerAvailability.providerId, Number(providerId)),
-                     eq(providerAvailability.dayOfWeek, startDate.getDay()),
-                  ),
-               );
-            const startMinutes =
-               startDate.getHours() * 60 + startDate.getMinutes();
-            const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+            // Duty Schedule for the Manila date: overrides replace weekly hours.
+            const availability = await dutyWindowsOn(
+               Number(providerId),
+               startDate,
+               tx,
+            );
+            const startMinutes = manilaMinutesOfDay(startDate);
+            const endMinutes = manilaMinutesOfDay(endDate);
             const withinAvailability = availability.some(
                (window) =>
                   startMinutes >= timeToMinutes(window.startTime) &&
@@ -484,9 +543,17 @@ export const getMyAppointments = async (req, res) => {
             providerFirst: providers.firstName,
             providerLast: providers.lastName,
             visitTypeName: visitTypes.name,
+            apePackageId: appointments.apePackageId,
+            apePackageName: apePackages.name,
+            arrivalWindowName: arrivalWindows.name,
          })
          .from(appointments)
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(apePackages, eq(apePackages.id, appointments.apePackageId))
+         .leftJoin(
+            arrivalWindows,
+            eq(arrivalWindows.id, appointments.arrivalWindowId),
+         )
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             priorAuthorizations,
@@ -509,7 +576,15 @@ export const cancelAppointment = async (req, res) => {
    if (req.user?.role === 'patient' && !req.user.patientId) {
       return res.status(403).json({ error: 'Patient account is not linked' });
    }
+   const { error, reason, reasonText } = parseCancellationReason(
+      req.user?.role,
+      req.body,
+   );
+   if (error) {
+      return res.status(400).json({ error });
+   }
    try {
+      const now = new Date();
       const cancelled = await db.transaction(
          async (tx) => {
             const conditions = [
@@ -529,7 +604,15 @@ export const cancelAppointment = async (req, res) => {
             }
             const [updated] = await tx
                .update(appointments)
-               .set({ status: 'cancelled', updatedAt: new Date() })
+               .set({
+                  status: 'cancelled',
+                  cancellationReason: reason,
+                  cancellationReasonText: reasonText,
+                  cancellationLetter: parseCancellationLetter(req.body?.letter),
+                  cancelledByUserId: req.user.id,
+                  cancelledAt: now,
+                  updatedAt: now,
+               })
                .where(and(...conditions))
                .returning({ id: appointments.id });
             if (!updated) {
@@ -585,6 +668,7 @@ export const cancelAppointment = async (req, res) => {
 function findAvailableSlots(
    visitType,
    availability,
+   overrides,
    busy,
    roomIds,
    patientId,
@@ -602,14 +686,22 @@ function findAvailableSlots(
       byProvider.set(row.providerId, rows);
    }
 
-   const lastDay = endOfDay(rangeEnd);
+   const overrideFor = new Map(
+      overrides.map((row) => [`${row.providerId}:${row.overrideDate}`, row]),
+   );
+
+   const lastDay = manilaDateString(rangeEnd);
    for (const [providerId, days] of byProvider) {
       for (
-         let day = new Date(rangeStart);
+         let day = manilaDateString(rangeStart);
          day <= lastDay;
-         day.setDate(day.getDate() + 1)
+         day = manilaDateString(atTime(day, 36 * 60)) // noon of the next day
       ) {
-         const windows = days.filter((item) => item.dayOfWeek === day.getDay());
+         const dayOfWeek = manilaDayOfWeek(atTime(day, 12 * 60));
+         const windows = effectiveDutyWindows(
+            overrideFor.get(`${providerId}:${day}`),
+            days.filter((item) => item.dayOfWeek === dayOfWeek),
+         );
          for (const window of windows) {
             const open = Math.max(
                timeToMinutes(window.startTime),
@@ -682,10 +774,11 @@ function findAvailableSlots(
    );
 }
 
+// `minutes` after Manila midnight of the Manila date string `day`.
 function atTime(day, minutes) {
-   const result = new Date(day);
-   result.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-   return result;
+   return new Date(
+      manilaDateBounds(day).startOfDay.getTime() + minutes * 60 * 1000,
+   );
 }
 
 function timeToMinutes(value) {
@@ -702,7 +795,45 @@ function normalizeSpecialty(value) {
 }
 
 function endOfDay(value) {
-   const result = new Date(value);
-   result.setHours(23, 59, 59, 999);
-   return result;
+   return manilaDateBounds(manilaDateString(value)).endOfDay;
 }
+
+// Shared by the patient and staff routes: the caller's role picks the letter direction.
+export const draftCancellationLetterHandler = async (req, res) => {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid appointment ID' });
+   }
+   const isPatient = req.user?.role === 'patient';
+   if (isPatient && !req.user.patientId) {
+      return res.status(403).json({ error: 'Patient account is not linked' });
+   }
+   const { error, reason, reasonText } = parseCancellationReason(
+      req.user?.role,
+      req.body,
+   );
+   if (error) {
+      return res.status(400).json({ error });
+   }
+   try {
+      const draft = await draftCancellationLetter({
+         appointmentId: id,
+         patientId: isPatient ? req.user.patientId : null,
+         direction: isPatient ? 'patient' : 'staff',
+         reason,
+         reasonText,
+         candidateDates: req.body?.candidateDates,
+      });
+      if (!draft) {
+         return res
+            .status(404)
+            .json({ error: 'Appointment not found or cannot be cancelled' });
+      }
+      return res.json(draft);
+   } catch (error) {
+      console.error('Failed to draft Cancellation Letter:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to draft Cancellation Letter' });
+   }
+};

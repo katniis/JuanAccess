@@ -16,6 +16,7 @@ import { db } from '../db/index.js';
 import {
    appeals,
    appointments,
+   auditLog,
    chartNotes,
    conditions,
    equipment,
@@ -92,6 +93,7 @@ export async function getStaffDashboardSnapshot() {
          patientId: appointments.patientId,
          patientFirstName: patients.firstName,
          patientLastName: patients.lastName,
+         patientGender: patients.gender,
          providerId: appointments.providerId,
          providerFirstName: providers.firstName,
          providerLastName: providers.lastName,
@@ -103,7 +105,7 @@ export async function getStaffDashboardSnapshot() {
       })
       .from(appointments)
       .innerJoin(patients, eq(patients.id, appointments.patientId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
       .leftJoin(rooms, eq(rooms.id, appointments.roomId))
       .leftJoin(
@@ -194,6 +196,7 @@ export async function getDoctorSchedule(providerId, startDate, endDate) {
          patientId: appointments.patientId,
          patientFirstName: patients.firstName,
          patientLastName: patients.lastName,
+         patientGender: patients.gender,
          patientDob: patients.dateOfBirth,
          isNewPatient: patients.isNewPatient,
          visitTypeId: appointments.visitTypeId,
@@ -344,7 +347,7 @@ export async function getPatientDetailWithChart(patientId) {
       })
       .from(appointments)
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .where(eq(appointments.patientId, patientId))
       .orderBy(desc(appointments.scheduledStart))
       .limit(20);
@@ -371,6 +374,7 @@ export async function getAppointmentPreVisitClinicalData(appointmentId) {
          patientId: appointments.patientId,
          patientFirstName: patients.firstName,
          patientLastName: patients.lastName,
+         patientGender: patients.gender,
          patientDob: patients.dateOfBirth,
          isNewPatient: patients.isNewPatient,
          intakeReasonNote: patients.intakeReasonNote,
@@ -388,7 +392,7 @@ export async function getAppointmentPreVisitClinicalData(appointmentId) {
       })
       .from(appointments)
       .innerJoin(patients, eq(patients.id, appointments.patientId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
       .leftJoin(rooms, eq(rooms.id, appointments.roomId))
       .leftJoin(equipment, eq(equipment.id, appointments.equipmentId))
@@ -624,7 +628,10 @@ export async function getResourceUtilization(date) {
    };
 }
 
-export async function staffCancelAppointment(appointmentId) {
+export async function staffCancelAppointment(
+   appointmentId,
+   { userId, reason, reasonText, letter = null },
+) {
    return await db.transaction(
       async (tx) => {
          const [appointment] = await tx
@@ -640,9 +647,18 @@ export async function staffCancelAppointment(appointmentId) {
 
          if (!appointment) return null;
 
+         const now = new Date();
          const [updated] = await tx
             .update(appointments)
-            .set({ status: 'cancelled', updatedAt: new Date() })
+            .set({
+               status: 'cancelled',
+               cancellationReason: reason,
+               cancellationReasonText: reasonText,
+               cancellationLetter: letter,
+               cancelledByUserId: userId,
+               cancelledAt: now,
+               updatedAt: now,
+            })
             .where(
                and(
                   eq(appointments.id, appointmentId),
@@ -653,11 +669,22 @@ export async function staffCancelAppointment(appointmentId) {
 
          if (!updated) return null;
 
+         // Written in the transaction so the audit entry commits with the cancellation.
+         await tx.insert(auditLog).values({
+            entityType: 'appointment',
+            entityId: appointmentId,
+            action: 'staff_cancel',
+            changedBy: userId,
+            oldValue: { status: appointment.status },
+            newValue: { status: 'cancelled', reason, reasonText },
+         });
+
          await notifyPatient(
             tx,
             appointment.patientId,
             'appointment_cancelled',
-            'Your appointment was cancelled by clinic staff.',
+            // The staff Cancellation Letter, when written, is the patient's notification.
+            letter || 'Your appointment was cancelled by clinic staff.',
          );
 
          // Cancel any pending waitlist offer on this appointment
@@ -714,6 +741,9 @@ export async function staffRescheduleAppointment(
             .limit(1);
 
          if (!appointment) return { error: 'not_found' };
+         // An APE Booking is an Arrival Window checked against Procedure capacity,
+         // not a timed slot (ADR 0002); staff cancel and rebook it instead.
+         if (appointment.apePackageId) return { error: 'ape_booking' };
 
          const providerId = newProviderId ?? appointment.providerId;
          const roomId = newRoomId ?? appointment.roomId;
@@ -740,17 +770,19 @@ export async function staffRescheduleAppointment(
             gte(appointments.scheduledEnd, scheduledStart),
          ];
 
-         // Provider conflict
-         const [providerConflict] = await tx
-            .select({ id: appointments.id })
-            .from(appointments)
-            .where(
-               and(
-                  ...conflictConditions,
-                  eq(appointments.providerId, providerId),
-               ),
-            )
-            .limit(1);
+         // Provider conflict (an APE Booking has no Practitioner yet)
+         const [providerConflict] = providerId
+            ? await tx
+                 .select({ id: appointments.id })
+                 .from(appointments)
+                 .where(
+                    and(
+                       ...conflictConditions,
+                       eq(appointments.providerId, providerId),
+                    ),
+                 )
+                 .limit(1)
+            : [];
 
          if (providerConflict) {
             return {

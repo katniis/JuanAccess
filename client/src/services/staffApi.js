@@ -9,10 +9,14 @@ export async function staffRequest(path, { method = 'GET', body } = {}) {
       response = await fetch(`${apiBaseUrl}${path}`, {
          method,
          credentials: 'include',
-         ...(body !== undefined && {
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-         }),
+         ...(body === undefined
+            ? {}
+            : body instanceof FormData
+              ? { body }
+              : {
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify(body),
+                }),
       });
    } catch {
       throw new Error(

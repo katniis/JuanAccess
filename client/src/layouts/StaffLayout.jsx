@@ -14,9 +14,16 @@ const navigation = [
    { label: 'Dashboard', path: '/staff', icon: 'grid', end: true },
    { label: 'Provider Schedule', path: '/staff/schedule', icon: 'calendar' },
    { label: 'Slot Management', path: '/staff/slots', icon: 'grid' },
+   { label: 'APE Queue', path: '/staff/ape-queue', icon: 'calendar' },
    { label: 'Prior Auth Queue', path: '/staff/prior-auth', icon: 'folder' },
    { label: 'Appeals Queue', path: '/staff/appeals', icon: 'scale' },
    { label: 'Disputes', path: '/staff/disputes', icon: 'receipt' },
+   {
+      label: 'Cancellation Report',
+      path: '/staff/reports/cancellations',
+      icon: 'alert',
+      adminOnly: true,
+   },
 ];
 
 function StaffLayout() {
@@ -177,20 +184,27 @@ function StaffLayout() {
                      className="sidebar-nav"
                      id="staff-sidebar-nav"
                      aria-label="Staff navigation">
-                     {navigation.map((item, index) => (
-                        <NavLink
-                           key={item.path}
-                           ref={index === 0 ? mobileNavFirstLinkRef : undefined}
-                           to={item.path}
-                           end={item.end}
-                           className={({ isActive }) =>
-                              `nav-link${isActive ? ' active' : ''}`
-                           }
-                           onClick={() => setMobileNavOpen(false)}>
-                           <Icon name={item.icon} />
-                           <span>{item.label}</span>
-                        </NavLink>
-                     ))}
+                     {navigation
+                        .filter(
+                           (item) =>
+                              !item.adminOnly || user?.role === 'staff_admin',
+                        )
+                        .map((item, index) => (
+                           <NavLink
+                              key={item.path}
+                              ref={
+                                 index === 0 ? mobileNavFirstLinkRef : undefined
+                              }
+                              to={item.path}
+                              end={item.end}
+                              className={({ isActive }) =>
+                                 `nav-link${isActive ? ' active' : ''}`
+                              }
+                              onClick={() => setMobileNavOpen(false)}>
+                              <Icon name={item.icon} />
+                              <span>{item.label}</span>
+                           </NavLink>
+                        ))}
                   </nav>
                   <div className="sidebar-account">
                      <NavLink

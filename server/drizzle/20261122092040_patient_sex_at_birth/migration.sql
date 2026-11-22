@@ -1,0 +1,1 @@
+ALTER TABLE "patients" ADD COLUMN "sex_at_birth" varchar(10);

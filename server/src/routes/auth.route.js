@@ -12,6 +12,11 @@ import {
    resetPassword,
    requestEmailChange,
    confirmEmailChange,
+   getMe,
+   acceptPrivacyPolicy,
+   verifySecondFactor,
+   startSecondFactorSetup,
+   confirmSecondFactorSetup,
 } from '../controller/auth.controller.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 
@@ -19,6 +24,9 @@ const router = express.Router();
 
 //Login
 router.post('/login', login);
+router.post('/second-factor/verify', verifySecondFactor);
+router.post('/second-factor/setup', startSecondFactorSetup);
+router.post('/second-factor/setup/confirm', confirmSecondFactorSetup);
 
 // Register Patient
 router.post('/register', patientRegister);
@@ -55,8 +63,7 @@ router.post('/email-change/request', verifyToken, requestEmailChange);
 router.post('/logout', logout);
 
 //me
-router.get('/me', verifyToken, (req, res) => {
-   res.json({ user: req.user });
-});
+router.get('/me', verifyToken, getMe);
+router.post('/consent', verifyToken, acceptPrivacyPolicy);
 
 export default router;

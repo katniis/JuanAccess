@@ -10,10 +10,22 @@ import priorAuthRoute from './routes/prior-auth.route.js';
 import staffRoute from './routes/staff.route.js';
 import billingRoute from './routes/billing.route.js';
 import notificationRoute from './routes/notification.route.js';
+import priceListRoute from './routes/price-list.route.js';
+import doctorDirectoryRoute from './routes/doctor-directory.route.js';
 
 process.env.TZ = process.env.CLINIC_TIME_ZONE;
 
 const app = express();
+
+// Proxy hops in front of the app, so req.ip (rate limits) is the real client.
+const trustProxyHops = process.env.TRUST_PROXY_HOPS?.trim();
+if (trustProxyHops) {
+   if (!/^\d+$/.test(trustProxyHops)) {
+      throw new Error('TRUST_PROXY_HOPS must be a non-negative integer');
+   }
+   app.set('trust proxy', Number(trustProxyHops));
+}
+
 app.use(
    cors({
       origin: process.env.CLIENT_ORIGIN,
@@ -46,6 +58,8 @@ app.use('/prior-auth', priorAuthRoute);
 app.use('/staff', staffRoute);
 app.use('/bills', billingRoute);
 app.use('/notifications', notificationRoute);
+app.use('/price-list', priceListRoute);
+app.use('/doctors', doctorDirectoryRoute);
 
 app.get('/api/health', async (req, res) => {
    res.json({ status: 'ok' });

@@ -11,6 +11,8 @@ import {
    EMAIL_UNAVAILABLE_MESSAGE,
 } from '../utils/emailFeatures.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
+import { genderOptions, sexAtBirthOptions } from '../utils/patientSex.js';
+import SecondFactorStep from '../components/SecondFactorStep.jsx';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {
    const [visible, setVisible] = useState(false);
@@ -45,7 +47,9 @@ function AuthPage({ mode = 'signin' }) {
    const navigate = useNavigate();
    const location = useLocation();
    const [searchParams] = useSearchParams();
-   const { signIn, registerPatient, acceptStaffInvitation } = useAuth();
+   const { signIn, registerPatient, acceptStaffInvitation, refreshUser } =
+      useAuth();
+   const [secondFactorStep, setSecondFactorStep] = useState(null);
    const [email, setEmail] = useState('');
    const [firstName, setFirstName] = useState('');
    const [lastName, setLastName] = useState('');
@@ -53,6 +57,7 @@ function AuthPage({ mode = 'signin' }) {
    const [signupStep, setSignupStep] = useState(1);
    const [registration, setRegistration] = useState({
       gender: '',
+      sex_at_birth: '',
       contact_phone: '',
       address: '',
       insurer_name: '',
@@ -65,6 +70,7 @@ function AuthPage({ mode = 'signin' }) {
    const [password, setPassword] = useState('');
    const [confirmPassword, setConfirmPassword] = useState('');
    const [rememberMe, setRememberMe] = useState(false);
+   const [privacyConsent, setPrivacyConsent] = useState(false);
    const [error, setError] = useState('');
    const [isSubmitting, setIsSubmitting] = useState(false);
    const emailUnavailableDialogRef = useRef(null);
@@ -84,6 +90,27 @@ function AuthPage({ mode = 'signin' }) {
          ...current,
          [field]: event.target.value,
       }));
+   };
+
+   const goToPortal = (user) => {
+      const homePath = getHomePathForRole(user.role);
+      const requestedPath = location.state?.from?.pathname;
+      const canReturnToRequestedPage =
+         user.role === 'patient'
+            ? requestedPath?.startsWith('/patient')
+            : requestedPath?.startsWith('/staff');
+      const requestedSearch = location.state?.from?.search || '';
+      navigate(
+         canReturnToRequestedPage ? requestedPath + requestedSearch : homePath,
+         {
+            replace: true,
+         },
+      );
+   };
+
+   const completeSecondFactor = async (user) => {
+      await refreshUser();
+      goToPortal(user);
    };
 
    const submit = async (event) => {
@@ -146,25 +173,26 @@ function AuthPage({ mode = 'signin' }) {
                last_name: lastName,
                date_of_birth: dateOfBirth,
                ...optionalDetails,
+               privacy_consent: privacyConsent,
             });
          } else if (isInvitation) {
-            user = await acceptStaffInvitation({
+            // The invite is now used; the session waits for Second Factor setup.
+            const result = await acceptStaffInvitation({
                token: invitationToken,
                password,
             });
+            setSecondFactorStep(result.secondFactor);
+            return;
          } else {
-            user = await signIn({ email, password, rememberMe });
+            const result = await signIn({ email, password, rememberMe });
+            if (result.secondFactor) {
+               setSecondFactorStep(result.secondFactor);
+               return;
+            }
+            user = result.user;
          }
 
-         const homePath = getHomePathForRole(user.role);
-         const requestedPath = location.state?.from?.pathname;
-         const canReturnToRequestedPage =
-            user.role === 'patient'
-               ? requestedPath?.startsWith('/patient')
-               : requestedPath?.startsWith('/staff');
-         navigate(canReturnToRequestedPage ? requestedPath : homePath, {
-            replace: true,
-         });
+         goToPortal(user);
       } catch (submitError) {
          setError(
             submitError.message ||
@@ -175,22 +203,29 @@ function AuthPage({ mode = 'signin' }) {
       }
    };
 
-   const title = isSignup
-      ? ['Create your account', 'Your details', 'Insurance coverage'][
-           signupStep - 1
-        ]
-      : isInvitation
-        ? 'Set up your staff account'
-        : 'Welcome back';
-   const subtitle = isSignup
-      ? [
-           'Set up your patient account.',
-           'Add a few optional details to your profile.',
-           'Add insurance now or leave it for later.',
-        ][signupStep - 1]
-      : isInvitation
-        ? 'Choose a password to accept your staff invitation.'
-        : 'Sign in to continue to JuanAccess.';
+   const title =
+      secondFactorStep === 'setup_required'
+         ? 'Set up your Second Factor'
+         : secondFactorStep
+           ? 'Enter your code'
+           : isSignup
+             ? ['Create your account', 'Your details', 'Insurance coverage'][
+                  signupStep - 1
+               ]
+             : isInvitation
+               ? 'Set up your staff account'
+               : 'Welcome back';
+   const subtitle = secondFactorStep
+      ? 'Staff accounts need a code from your authenticator app to sign in.'
+      : isSignup
+        ? [
+             'Set up your patient account.',
+             'Tell us a little more about you.',
+             'Add insurance now or leave it for later.',
+          ][signupStep - 1]
+        : isInvitation
+          ? 'Choose a password to accept your staff invitation.'
+          : 'Sign in to continue to JuanAccess.';
 
    return (
       <main className="auth-page">
@@ -202,6 +237,9 @@ function AuthPage({ mode = 'signin' }) {
                <img src="/juanaccess-logo.svg" alt="JuanAccess" />
             </Link>
             <p>Patient and staff portal</p>
+            <Link className="public-nav-link" to="/doctors">
+               Meet Our Doctors
+            </Link>
          </header>
 
          <div className="auth-content">
@@ -237,10 +275,29 @@ function AuthPage({ mode = 'signin' }) {
                   </ol>
                )}
 
+               {secondFactorStep && (
+                  <SecondFactorStep
+                     mode={secondFactorStep}
+                     needsEnrolmentCode={!isInvitation}
+                     onComplete={completeSecondFactor}
+                     onCancel={() => {
+                        // A used invite can't be resubmitted; finish setup via sign-in.
+                        if (isInvitation) {
+                           navigate('/login', { replace: true });
+                           return;
+                        }
+                        setSecondFactorStep(null);
+                        setPassword('');
+                        setError('');
+                     }}
+                  />
+               )}
+
                <form
                   className="auth-form"
                   onSubmit={submit}
-                  aria-busy={isSubmitting}>
+                  aria-busy={isSubmitting}
+                  hidden={Boolean(secondFactorStep)}>
                   {isSignup && signupStep === 1 && (
                      <>
                         <div className="auth-name-fields">
@@ -337,28 +394,40 @@ function AuthPage({ mode = 'signin' }) {
                      <>
                         <div className="auth-name-fields">
                            <div className="auth-field">
-                              <label htmlFor="gender">
-                                 Gender{' '}
-                                 <span className="auth-optional-label">
-                                    Optional
-                                 </span>
-                              </label>
+                              <label htmlFor="gender">Gender</label>
                               <select
                                  id="gender"
                                  name="gender"
                                  autoComplete="sex"
                                  value={registration.gender}
-                                 onChange={updateRegistration('gender')}>
+                                 onChange={updateRegistration('gender')}
+                                 required>
                                  <option value="">Select</option>
-                                 <option value="female">Female</option>
-                                 <option value="male">Male</option>
-                                 <option value="nonbinary">Non-binary</option>
-                                 <option value="other">Other</option>
-                                 <option value="prefer_not_to_say">
-                                    Prefer not to say
-                                 </option>
+                                 {genderOptions.map(([value, label]) => (
+                                    <option value={value} key={value}>
+                                       {label}
+                                    </option>
+                                 ))}
                               </select>
                            </div>
+                           <div className="auth-field">
+                              <label htmlFor="sex-at-birth">Sex at Birth</label>
+                              <select
+                                 id="sex-at-birth"
+                                 name="sex_at_birth"
+                                 value={registration.sex_at_birth}
+                                 onChange={updateRegistration('sex_at_birth')}
+                                 required>
+                                 <option value="">Select</option>
+                                 {sexAtBirthOptions.map(([value, label]) => (
+                                    <option value={value} key={value}>
+                                       {label}
+                                    </option>
+                                 ))}
+                              </select>
+                           </div>
+                        </div>
+                        <div className="auth-name-fields">
                            <div className="auth-field">
                               <label htmlFor="contact-phone">
                                  Phone number{' '}
@@ -504,6 +573,23 @@ function AuthPage({ mode = 'signin' }) {
                               </div>
                            </div>
                         </div>
+                        <label className="settings-checkbox">
+                           <input
+                              type="checkbox"
+                              checked={privacyConsent}
+                              onChange={(event) =>
+                                 setPrivacyConsent(event.target.checked)
+                              }
+                              required
+                           />
+                           <span>
+                              I have read and agree to the{' '}
+                              <Link to="/privacy" target="_blank">
+                                 Privacy Policy
+                              </Link>
+                              .
+                           </span>
+                        </label>
                      </>
                   )}
 

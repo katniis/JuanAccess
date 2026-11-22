@@ -5,6 +5,7 @@ import {
    varchar,
    integer,
    timestamp,
+   text,
    check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -46,6 +47,20 @@ export const users = pgTable(
          .default(true),
 
       authVersion: integer('auth_version').notNull().default(0),
+
+      failedLoginAttempts: integer('failed_login_attempts')
+         .notNull()
+         .default(0),
+
+      lockedUntil: timestamp('locked_until', { withTimezone: true }),
+
+      // Encrypted with TOTP_ENCRYPTION_KEY; active only once totpEnabledAt is set.
+      totpSecretEncrypted: text('totp_secret_encrypted'),
+
+      totpEnabledAt: timestamp('totp_enabled_at', { withTimezone: true }),
+
+      // Last accepted TOTP time step; codes at or before it are replays.
+      totpLastUsedStep: integer('totp_last_used_step'),
 
       createdAt: timestamp('created_at', {
          withTimezone: true,

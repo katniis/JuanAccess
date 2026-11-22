@@ -55,12 +55,12 @@ function PatientAppointments() {
       setAppointmentToCancel(appointment);
    };
 
-   const confirmCancellation = async () => {
+   const confirmCancellation = async (cancellation) => {
       const appointment = appointmentToCancel;
       if (!appointment) return;
       setBusyId(appointment.id);
       try {
-         await cancelPatientAppointment(appointment.id);
+         await cancelPatientAppointment(appointment.id, cancellation);
          await loadAppointments();
          notify({ type: 'success', message: 'Appointment cancelled.' });
       } catch (error) {
@@ -152,7 +152,7 @@ function PatientAppointments() {
             appointment={appointmentToCancel}
             busy={Boolean(busyId)}
             onCancel={() => setAppointmentToCancel(null)}
-            onConfirm={() => void confirmCancellation()}
+            onConfirm={(cancellation) => void confirmCancellation(cancellation)}
          />
          <header className="appointments-heading">
             <h1>My Appointments</h1>

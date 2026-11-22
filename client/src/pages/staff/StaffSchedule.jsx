@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import DutyOverrides from './DutyOverrides.jsx';
+import AppointmentCancelDialog from '../../components/AppointmentCancelDialog.jsx';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
+import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 import {
+   STAFF_CANCELLATION_REASONS,
+   cancelStaffAppointment,
    getAppointmentPreVisitData,
    getProviderSchedule,
    getStaffProviders,
 } from '../../services/staffSchedule.js';
 import { gsap, useGSAP } from '../../utils/portalGsap.js';
+import { genderLabel } from '../../utils/patientSex.js';
 
 function todayInManila() {
    const parts = new Intl.DateTimeFormat('en-CA', {
@@ -72,6 +78,7 @@ function AppointmentDrawer({
    provider,
    selectedDate,
    onClose,
+   onCancelAppointment,
    closeButtonRef,
 }) {
    const drawerRef = useRef(null);
@@ -148,6 +155,10 @@ function AppointmentDrawer({
             <div className="staff-detail-body">
                <dl className="staff-detail-grid">
                   <div>
+                     <dt>Gender</dt>
+                     <dd>{genderLabel(appointment.patientGender)}</dd>
+                  </div>
+                  <div>
                      <dt>Visit type</dt>
                      <dd>{appointment.visitTypeName}</dd>
                   </div>
@@ -184,7 +195,7 @@ function AppointmentDrawer({
                   </div>
                   <div>
                      <dt>Room</dt>
-                     <dd>{appointment.roomName || 'Not assigned'}</dd>
+                     <dd>{appointment.roomName || 'Assigned on the day'}</dd>
                   </div>
                   <div>
                      <dt>Equipment</dt>
@@ -194,6 +205,14 @@ function AppointmentDrawer({
                      </dd>
                   </div>
                </dl>
+               {appointment.status === 'scheduled' && (
+                  <button
+                     className="button button-danger"
+                     type="button"
+                     onClick={onCancelAppointment}>
+                     Cancel appointment
+                  </button>
+               )}
                <section className="staff-previsit-summary" aria-live="polite">
                   <h3>Pre-visit summary</h3>
                   {loading ? (
@@ -271,6 +290,7 @@ function AppointmentDrawer({
 }
 
 function StaffSchedule() {
+   const { role } = useOutletContext();
    const [searchParams, setSearchParams] = useSearchParams();
    const [requestedProviderId] = useState(
       () => Number(searchParams.get('provider')) || null,
@@ -287,6 +307,9 @@ function StaffSchedule() {
    const appointments = hasScheduleResult ? scheduleResult.appointments : null;
    const scheduleError = hasScheduleResult && scheduleResult.error;
    const [selectedAppointment, setSelectedAppointment] = useState(null);
+   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+   const [cancelling, setCancelling] = useState(false);
+   const { notify } = usePortalFeedback();
    const pageRef = useRef(null);
    const closeButtonRef = useRef(null);
    const appointmentButtonRef = useRef(null);
@@ -360,6 +383,32 @@ function StaffSchedule() {
          appointmentButtonRef.current?.focus();
       };
    }, [selectedAppointment]);
+
+   const confirmCancellation = async (cancellation) => {
+      const id = appointmentToCancel?.id;
+      if (!id) return;
+      setCancelling(true);
+      try {
+         await cancelStaffAppointment(id, cancellation);
+         setScheduleResult((result) => ({
+            ...result,
+            appointments: result.appointments.map((appointment) =>
+               appointment.id === id
+                  ? { ...appointment, status: 'cancelled' }
+                  : appointment,
+            ),
+         }));
+         notify({ type: 'success', message: 'Appointment cancelled.' });
+      } catch (error) {
+         notify({
+            type: 'error',
+            message: error.message || 'We could not cancel this appointment.',
+         });
+      } finally {
+         setCancelling(false);
+         setAppointmentToCancel(null);
+      }
+   };
 
    const selectedProvider = providers?.find(
       (provider) => provider.id === providerId,
@@ -540,7 +589,10 @@ function StaffSchedule() {
                                  appointment.patientLastName,
                               )}
                            </strong>
-                           <span>{appointment.visitTypeName}</span>
+                           <span>
+                              {appointment.visitTypeName} ·{' '}
+                              {genderLabel(appointment.patientGender)}
+                           </span>
                         </span>
                         <span
                            className={`schedule-checkin ${appointment.status === 'completed' ? 'complete' : 'pending'}`}>
@@ -582,6 +634,13 @@ function StaffSchedule() {
                </div>
             </section>
          )}
+         {role === 'staff_admin' && (
+            <DutyOverrides
+               key={selectedProvider.id}
+               practitioner={selectedProvider}
+               defaultDate={selectedDate}
+            />
+         )}
          {selectedAppointment && (
             <AppointmentDrawer
                key={selectedAppointment.id}
@@ -589,9 +648,30 @@ function StaffSchedule() {
                provider={selectedProvider}
                selectedDate={selectedDate}
                onClose={() => setSelectedAppointment(null)}
+               onCancelAppointment={() => {
+                  setAppointmentToCancel({
+                     id: selectedAppointment.id,
+                     providerName: `Dr. ${selectedProvider.firstName} ${selectedProvider.lastName}`,
+                     visitType: selectedAppointment.visitTypeName,
+                     dateLabel: dateLabel(selectedDate, {
+                        month: 'short',
+                        day: 'numeric',
+                     }),
+                     timeLabel: timeLabel(selectedAppointment.scheduledStart),
+                  });
+                  setSelectedAppointment(null);
+               }}
                closeButtonRef={closeButtonRef}
             />
          )}
+         <AppointmentCancelDialog
+            appointment={appointmentToCancel}
+            busy={cancelling}
+            reasons={STAFF_CANCELLATION_REASONS}
+            direction="staff"
+            onCancel={() => setAppointmentToCancel(null)}
+            onConfirm={(cancellation) => void confirmCancellation(cancellation)}
+         />
       </div>
    );
 }

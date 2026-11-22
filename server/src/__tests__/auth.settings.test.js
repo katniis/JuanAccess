@@ -50,6 +50,7 @@ describe('account settings', () => {
                lastName: 'Patient',
                dateOfBirth: '1990-01-02',
                gender: 'female',
+               sexAtBirth: null,
                contactPhone: '09170000000',
                address: 'Test address',
             },
@@ -71,10 +72,57 @@ describe('account settings', () => {
                lastName: 'Patient',
                dateOfBirth: '1990-01-02',
                gender: 'female',
+               sexAtBirth: null,
                contactPhone: '09170000000',
                address: 'Test address',
             },
          },
+      });
+   });
+
+   it.each([
+      ['an invalid gender', { gender: 'unknown' }],
+      ['a blank gender', { gender: '' }],
+      ['an invalid Sex at Birth', { sexAtBirth: 'other' }],
+      ['a blank Sex at Birth', { sexAtBirth: '' }],
+   ])('rejects %s in profile updates', async (_label, body) => {
+      mockQueryQueue.push([patient]);
+      const res = await fetch(`${ctx.baseUrl}/auth/settings`, {
+         method: 'PATCH',
+         headers: { ...authHeader, 'content-type': 'application/json' },
+         body: JSON.stringify(body),
+      });
+
+      expect(res.status).toBe(400);
+      expect(await readJson(res)).toEqual({
+         error: 'Profile details are invalid.',
+      });
+   });
+
+   it('stores gender and Sex at Birth from Settings', async () => {
+      mockQueryQueue.push(
+         [patient],
+         [{ firstName: 'Pat', lastName: 'Patient' }],
+         [],
+         [],
+         [{ ...patient, gender: 'prefer_not_to_say', sexAtBirth: 'female' }],
+      );
+      const res = await fetch(`${ctx.baseUrl}/auth/settings`, {
+         method: 'PATCH',
+         headers: { ...authHeader, 'content-type': 'application/json' },
+         body: JSON.stringify({
+            gender: 'prefer_not_to_say',
+            sexAtBirth: 'female',
+         }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockMutationLog).toContainEqual({
+         set: { gender: 'prefer_not_to_say', sexAtBirth: 'female' },
+      });
+      expect((await readJson(res)).settings.profile).toMatchObject({
+         gender: 'prefer_not_to_say',
+         sexAtBirth: 'female',
       });
    });
 
@@ -241,5 +289,32 @@ describe('account settings', () => {
          headers: { cookie: `token=${token}` },
       });
       expect(oldSession.status).toBe(401);
+   });
+
+   it('keeps a staff session at 12 hours after a password change', async () => {
+      const staff = { ...patient, role: 'staff', patientId: null };
+      const staffToken = jwt.sign({ id: staff.id, authVersion: 0 }, secret);
+      mockQueryQueue.push(
+         [{ ...staff, authVersion: 0 }],
+         [{ passwordHash, authVersion: 0 }],
+         [{ authVersion: 1 }],
+      );
+      const res = await fetch(`${ctx.baseUrl}/auth/password`, {
+         method: 'PATCH',
+         headers: {
+            cookie: `token=${staffToken}`,
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({
+            currentPassword: 'current-password',
+            newPassword: 'replacement-password',
+         }),
+      });
+
+      expect(res.status).toBe(200);
+      const setCookie = res.headers.get('set-cookie');
+      expect(setCookie).toMatch(/max-age=43200/i);
+      const issued = jwt.decode(setCookie.match(/token=([^;]+)/)[1]);
+      expect(issued.exp - issued.iat).toBe(12 * 60 * 60);
    });
 });

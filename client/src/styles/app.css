@@ -3352,6 +3352,37 @@ dialog::-webkit-scrollbar,
    font-size: var(--type-body);
    font-weight: 600;
 }
+.appointment-cancel-field {
+   display: grid;
+   gap: 6px;
+   margin-top: 14px;
+   color: #173652;
+   font-size: var(--type-small);
+   font-weight: 600;
+}
+.appointment-cancel-field select,
+.appointment-cancel-field input,
+.appointment-cancel-field textarea {
+   width: 100%;
+   padding: 10px 12px;
+   border: 1px solid #dce5ee;
+   border-radius: 10px;
+   background: #fff;
+   color: #102d4c;
+   font: inherit;
+   font-weight: 400;
+}
+.appointment-cancel-field textarea {
+   resize: vertical;
+}
+.appointment-cancel-draft {
+   margin-top: 10px;
+}
+.appointment-cancel-error {
+   margin: 8px 0 0;
+   color: #b42318;
+   font-size: var(--type-small);
+}
 .appointment-cancel-actions {
    display: flex;
    justify-content: flex-end;
@@ -5315,6 +5346,29 @@ dialog::-webkit-scrollbar,
 .auth-form {
    display: grid;
    gap: 17px;
+}
+.auth-form[hidden] {
+   display: none;
+}
+.auth-second-factor-qr {
+   display: grid;
+   justify-items: center;
+   gap: 8px;
+   color: #71869b;
+   font-size: var(--type-small);
+   text-align: center;
+   overflow-wrap: anywhere;
+}
+.auth-recovery-codes {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 8px;
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+.auth-recovery-codes code {
+   font-size: var(--type-small);
 }
 .auth-name-fields {
    display: grid;
@@ -7824,6 +7878,20 @@ dialog::-webkit-scrollbar,
 .staff-invite-form > .button {
    justify-self: start;
 }
+.staff-invite-form textarea {
+   width: 100%;
+   padding: 9px 11px;
+   border: 1px solid #dce5ee;
+   border-radius: 10px;
+   background: #fff;
+   color: #173652;
+   font: inherit;
+   font-size: var(--type-body);
+}
+.staff-practitioner-form-title {
+   grid-column: 1 / -1;
+   margin: 0;
+}
 .staff-access-invite > .prior-auth-inline-error {
    margin: 0 24px 20px;
 }
@@ -8028,4 +8096,121 @@ dialog::-webkit-scrollbar,
       flex-direction: column;
       padding: 16px 17px;
    }
+}
+.privacy-policy {
+   min-height: 100vh;
+   padding: 24px 16px 48px;
+   background: #f6f9fc;
+   color: #102d4c;
+}
+.privacy-policy article {
+   max-width: 720px;
+   margin: 24px auto 0;
+   line-height: 1.6;
+}
+.privacy-policy h2 {
+   margin-top: 28px;
+   font-size: var(--type-heading-small);
+}
+.price-list-table {
+   width: 100%;
+   border-collapse: collapse;
+}
+.price-list-table th,
+.price-list-table td {
+   padding: 8px 0;
+   border-bottom: 1px solid #dbe5ef;
+   text-align: left;
+   font-weight: normal;
+}
+.price-list-table td {
+   text-align: right;
+   white-space: nowrap;
+}
+.price-list-table form {
+   display: inline-flex;
+   gap: 8px;
+   align-items: center;
+}
+.price-list-table input {
+   width: 7rem;
+}
+.privacy-policy-version {
+   color: #58728e;
+}
+.privacy-policy-draft {
+   padding: 12px 16px;
+   border: 1px solid #f2d39b;
+   border-radius: 12px;
+   background: #fff4df;
+}
+.public-nav-link {
+   color: #0b5f6b;
+   font-size: var(--type-body);
+   font-weight: 600;
+}
+.auth-page .public-nav-link {
+   color: #e8f6f7;
+}
+.doctor-list {
+   display: grid;
+   gap: 12px;
+   padding: 0;
+   list-style: none;
+}
+.doctor-card {
+   display: flex;
+   align-items: center;
+   gap: 16px;
+   padding: 16px;
+   border: 1px solid #d8e3ec;
+   border-radius: 12px;
+   background: #fff;
+   color: inherit;
+   text-decoration: none;
+}
+.doctor-card > span {
+   display: grid;
+   gap: 2px;
+   color: #58728e;
+}
+.doctor-card strong {
+   color: #102d4c;
+}
+.doctor-photo {
+   display: inline-grid;
+   flex: none;
+   place-items: center;
+   width: 72px;
+   height: 72px;
+   border-radius: 50%;
+   background: #dcecf0;
+   color: #0b5f6b;
+   font-weight: 700;
+   object-fit: cover;
+}
+.doctor-profile-header {
+   display: flex;
+   align-items: center;
+   gap: 16px;
+   margin: 16px 0;
+}
+.doctor-details div {
+   display: grid;
+   grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+   gap: 12px;
+   padding: 8px 0;
+   border-bottom: 1px solid #e3ebf2;
+}
+.doctor-details dt {
+   color: #58728e;
+}
+.doctor-details dd {
+   margin: 0;
+}
+.doctor-directory .button {
+   margin-top: 24px;
+}
+.booking-chosen-doctor {
+   margin-top: 8px;
 }

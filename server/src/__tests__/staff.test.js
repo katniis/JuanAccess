@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import {
+   mockMutationLog,
    mockQueryQueue,
+   mockSelectLog,
    readJson,
    resetMocks,
    startServer,
@@ -38,8 +40,15 @@ const adminUser = {
 const token = (user) => jwt.sign({ id: user.id }, secret);
 const authHeader = (user) => ({ cookie: `token=${token(user)}` });
 
+let ctx;
+const staffCancel = (id, body) =>
+   fetch(`${ctx.baseUrl}/staff/appointments/${id}/cancel`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...authHeader(staffUser) },
+      body: JSON.stringify(body),
+   });
+
 describe('Staff Backend Routes & Controller', () => {
-   let ctx;
    beforeAll(async () => {
       ctx = await startServer();
    });
@@ -107,6 +116,40 @@ describe('Staff Backend Routes & Controller', () => {
          expect(body.snapshot.pendingAppealsCount).toBe(1);
          expect(body.snapshot.openWaitlistSlotsCount).toBe(3);
          expect(body.todayAppointments).toHaveLength(1);
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
+      });
+
+      it('lists an appointment with no practitioner or room', async () => {
+         const noPractitioner = {
+            id: 102,
+            scheduledStart: new Date().toISOString(),
+            patientFirstName: 'Ana',
+            patientLastName: 'Reyes',
+            providerId: null,
+            providerFirstName: null,
+            providerLastName: null,
+            roomId: null,
+            roomName: null,
+         };
+         mockQueryQueue.push(
+            [staffUser],
+            [{ count: 1 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [noPractitioner],
+         );
+
+         const res = await fetch(`${ctx.baseUrl}/staff/dashboard`, {
+            headers: authHeader(staffUser),
+         });
+
+         expect(res.status).toBe(200);
+         expect((await readJson(res)).todayAppointments).toEqual([
+            noPractitioner,
+         ]);
       });
    });
 
@@ -160,6 +203,9 @@ describe('Staff Backend Routes & Controller', () => {
          const body = await readJson(res);
          expect(body.schedule).toHaveLength(1);
          expect(body.schedule[0].visitTypeName).toBe('Follow-up');
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
       });
    });
 
@@ -207,6 +253,9 @@ describe('Staff Backend Routes & Controller', () => {
             'New patient — no prior chart history available',
          );
          expect(body.fallbackSummary).toContain('Knee pain after running');
+         expect(mockSelectLog).toContainEqual(
+            expect.arrayContaining(['patientFirstName', 'patientGender']),
+         );
       });
 
       it('fetches pre-visit clinical data with raw medical records for established patient', async () => {
@@ -297,6 +346,37 @@ describe('Staff Backend Routes & Controller', () => {
          expect(body.rooms[0].bookedMinutes).toBe(45);
       });
 
+      it('counts an appointment with no room or practitioner in utilization', async () => {
+         mockQueryQueue.push(
+            [staffUser],
+            [{ id: 1, name: 'Exam 1', roomType: 'exam' }],
+            [],
+            [{ id: 1, firstName: 'Amanda', lastName: 'Torres' }],
+            [
+               {
+                  id: 402,
+                  roomId: null,
+                  equipmentId: null,
+                  providerId: null,
+                  scheduledStart: '2026-10-04T09:00:00.000Z',
+                  scheduledEnd: '2026-10-04T09:45:00.000Z',
+                  status: 'scheduled',
+                  visitTypeName: 'Annual Physical Examination',
+               },
+            ],
+            [],
+         );
+
+         const res = await fetch(
+            `${ctx.baseUrl}/staff/slots/utilization?date=2026-10-04`,
+            { headers: authHeader(staffUser) },
+         );
+
+         expect(res.status).toBe(200);
+         const body = await readJson(res);
+         expect(body.rooms[0].bookedMinutes).toBe(0);
+      });
+
       it('cancels appointment as staff override', async () => {
          const appt = {
             id: 401,
@@ -313,22 +393,55 @@ describe('Staff Backend Routes & Controller', () => {
             [staffUser],
             [appt], // select appointment
             [{ id: 401, status: 'cancelled' }], // update appointment
+            [], // insert audit entry
             [], // select waitlist offer
             [{ specialty: 'Internal Medicine' }], // provider
             [{ id: 1, durationMinutes: 30 }], // visitType
             [], // waitlist candidates
          );
 
-         const res = await fetch(
-            `${ctx.baseUrl}/staff/appointments/401/cancel`,
-            {
-               method: 'PATCH',
-               headers: authHeader(staffUser),
-            },
-         );
+         const res = await staffCancel(401, {
+            reason: 'other',
+            reasonText: '  Water outage in the building  ',
+         });
          expect(res.status).toBe(200);
          const body = await readJson(res);
          expect(body.message).toMatch(/cancelled successfully/i);
+
+         const update = mockMutationLog.find(
+            (entry) => entry.set?.status === 'cancelled',
+         );
+         expect(update.set).toMatchObject({
+            cancellationReason: 'other',
+            cancellationReasonText: 'Water outage in the building',
+            cancelledByUserId: staffUser.id,
+         });
+         expect(update.set.cancelledAt).toBeInstanceOf(Date);
+
+         const audit = mockMutationLog.find(
+            (entry) => entry.values?.action === 'staff_cancel',
+         );
+         expect(audit.values).toMatchObject({
+            entityType: 'appointment',
+            entityId: 401,
+            changedBy: staffUser.id,
+            newValue: {
+               status: 'cancelled',
+               reason: 'other',
+               reasonText: 'Water outage in the building',
+            },
+         });
+      });
+
+      it.each([
+         ['a missing reason', {}],
+         ['a patient-only category', { reason: 'feeling_better' }],
+         ['"other" without text', { reason: 'other', reasonText: '   ' }],
+      ])('rejects a staff cancel with %s', async (_label, payload) => {
+         mockQueryQueue.push([staffUser]);
+         const res = await staffCancel(401, payload);
+         expect(res.status).toBe(400);
+         expect(mockMutationLog).toHaveLength(0);
       });
 
       it('monitors waitlist entries', async () => {

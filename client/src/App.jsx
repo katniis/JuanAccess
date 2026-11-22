@@ -13,6 +13,7 @@ import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import ErrorState from './components/ErrorState.jsx';
 import PatientLayout from './layouts/PatientLayout.jsx';
 import BookAppointment from './pages/patient/BookAppointment.jsx';
+import BookApe from './pages/patient/BookApe.jsx';
 import PatientAppointments from './pages/patient/PatientAppointments.jsx';
 import PatientDashboard from './pages/patient/PatientDashboard.jsx';
 import PatientWaitlist from './pages/patient/PatientWaitlist.jsx';
@@ -21,6 +22,7 @@ import PatientSettings from './pages/patient/PatientSettings.jsx';
 import StaffLayout from './layouts/StaffLayout.jsx';
 import StaffAppeals from './pages/staff/StaffAppeals.jsx';
 import StaffSettings from './pages/staff/StaffSettings.jsx';
+import StaffCancellationReport from './pages/staff/StaffCancellationReport.jsx';
 import StaffAttention from './pages/staff/StaffAttention.jsx';
 import StaffDashboard from './pages/staff/StaffDashboard.jsx';
 import StaffDisputeDetail from './pages/staff/StaffDisputeDetail.jsx';
@@ -29,7 +31,11 @@ import StaffPriorAuth from './pages/staff/StaffPriorAuth.jsx';
 import StaffPatientRecord from './pages/staff/StaffPatientRecord.jsx';
 import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
+import StaffApeQueue from './pages/staff/StaffApeQueue.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import PriceList from './pages/PriceList.jsx';
+import { DoctorDirectory, DoctorProfile } from './pages/DoctorDirectory.jsx';
 import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
@@ -193,6 +199,13 @@ function App() {
                         </PublicOnly>
                      }
                   />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route path="/prices" element={<PriceList />} />
+                  <Route path="/doctors" element={<DoctorDirectory />} />
+                  <Route
+                     path="/doctors/:doctorId"
+                     element={<DoctorProfile />}
+                  />
                   <Route
                      path="/forgot-password"
                      element={<AccountRecoveryPage mode="forgot" />}
@@ -215,6 +228,7 @@ function App() {
                      <Route index element={<StaffDashboard />} />
                      <Route path="schedule" element={<StaffSchedule />} />
                      <Route path="slots" element={<StaffSlotManagement />} />
+                     <Route path="ape-queue" element={<StaffApeQueue />} />
                      <Route path="prior-auth" element={<StaffPriorAuth />} />
                      <Route path="appeals" element={<StaffAppeals />} />
                      <Route path="disputes" element={<StaffDisputes />} />
@@ -224,6 +238,10 @@ function App() {
                      />
                      <Route path="attention" element={<StaffAttention />} />
                      <Route path="settings" element={<StaffSettings />} />
+                     <Route
+                        path="reports/cancellations"
+                        element={<StaffCancellationReport />}
+                     />
                      <Route
                         path="records/:recordType/:recordId"
                         element={<StaffPatientRecord />}
@@ -238,6 +256,7 @@ function App() {
                      }>
                      <Route index element={<PatientDashboard />} />
                      <Route path="book" element={<BookAppointment />} />
+                     <Route path="book-ape" element={<BookApe />} />
                      <Route path="waitlist" element={<PatientWaitlist />} />
                      <Route
                         path="appointments"

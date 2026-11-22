@@ -18,7 +18,12 @@ export const verifyToken = async (req, res, next) => {
 
    try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      if (typeof decoded !== 'object' || typeof decoded.id !== 'number') {
+      // Pending Second Factor tokens carry a purpose and are never sessions.
+      if (
+         typeof decoded !== 'object' ||
+         typeof decoded.id !== 'number' ||
+         decoded.purpose
+      ) {
          return res
             .status(401)
             .json({ message: 'Not authorized: invalid token.' });

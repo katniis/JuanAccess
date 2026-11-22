@@ -16,3 +16,17 @@ export async function createStaffInvitation(details) {
       },
    });
 }
+
+// Returns { enrolmentCode, expiresAt } once; earlier unused codes stop working.
+export async function issueStaffEnrolmentCode(userId) {
+   return staffRequest(`/staff/admin/users/${userId}/enrolment-code`, {
+      method: 'POST',
+   });
+}
+
+// Clears the user's Second Factor, signs them out everywhere, and returns a fresh Enrolment Code.
+export async function resetStaffSecondFactor(userId) {
+   return staffRequest(`/staff/admin/users/${userId}/second-factor/reset`, {
+      method: 'POST',
+   });
+}
