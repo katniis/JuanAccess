@@ -30,25 +30,14 @@ describe('Price List', () => {
    });
    beforeEach(resetMocks);
 
-   it('lists Procedure prices and Consultation Fees without signing in', async () => {
-      mockQueryQueue.push(
-         [
-            {
-               procedureCode: 'CBC',
-               description: 'Complete blood count',
-               standardCost: '350.00',
-            },
-         ],
-         [
-            {
-               id: 5,
-               firstName: 'Ana',
-               lastName: 'Synthetic',
-               specialty: 'Internal Medicine',
-               consultationFee: '800.00',
-            },
-         ],
-      );
+   it('lists Procedure prices without signing in and no doctor data', async () => {
+      mockQueryQueue.push([
+         {
+            procedureCode: 'CBC',
+            description: 'Complete blood count',
+            standardCost: '350.00',
+         },
+      ]);
       const res = await fetch(`${ctx.baseUrl}/price-list`);
 
       expect(res.status).toBe(200);
@@ -60,24 +49,14 @@ describe('Price List', () => {
                standardCost: '350.00',
             },
          ],
-         consultationFees: [
-            {
-               id: 5,
-               firstName: 'Ana',
-               lastName: 'Synthetic',
-               specialty: 'Internal Medicine',
-               consultationFee: '800.00',
-            },
-         ],
       });
    });
 
-   it('selects only public columns', async () => {
+   it('selects only Procedure columns, never Practitioners', async () => {
       await fetch(`${ctx.baseUrl}/price-list`);
 
       expect(mockSelectLog).toEqual([
          ['procedureCode', 'description', 'standardCost'],
-         ['id', 'firstName', 'lastName', 'specialty', 'consultationFee'],
       ]);
    });
 

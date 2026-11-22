@@ -142,6 +142,7 @@ export const getAvailableSlots = async (req, res) => {
             providerId: providers.id,
             firstName: providers.firstName,
             lastName: providers.lastName,
+            consultationFee: providers.consultationFee,
             dayOfWeek: providerAvailability.dayOfWeek,
             startTime: providerAvailability.startTime,
             endTime: providerAvailability.endTime,
@@ -244,20 +245,22 @@ export const getAvailableSlots = async (req, res) => {
             ? { startTime: timeStart, endTime: timeEnd }
             : null,
       );
-      const names = new Map(
-         eligibleProviders.map((provider) => [
-            provider.providerId,
-            `${provider.firstName} ${provider.lastName}`,
-         ]),
+      const byId = new Map(
+         eligibleProviders.map((provider) => [provider.providerId, provider]),
       );
       return res.json({
          visit_type: visitType.name,
-         slots: slots.map((slot) => ({
-            provider_id: slot.providerId,
-            provider_name: names.get(slot.providerId),
-            start: slot.start,
-            end: slot.end,
-         })),
+         slots: slots.map((slot) => {
+            const provider = byId.get(slot.providerId);
+            return {
+               provider_id: slot.providerId,
+               provider_name: `${provider.firstName} ${provider.lastName}`,
+               // Signed-in patients see the Consultation Fee on each slot.
+               consultation_fee: provider.consultationFee ?? null,
+               start: slot.start,
+               end: slot.end,
+            };
+         }),
       });
    } catch (error) {
       console.error('Failed to search appointment slots:', error);

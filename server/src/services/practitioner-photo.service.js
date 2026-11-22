@@ -30,6 +30,6 @@ export async function storePractitionerPhoto({ practitionerId, file }) {
       upsert: false,
    });
    if (error) throw new Error('Practitioner photo upload failed');
-   // The bucket must be public: photos appear on the public Doctor Directory.
+   // The bucket must be public: Doctor Profile photos load by plain URL in the browser.
    return storage.getPublicUrl(path).data.publicUrl;
 }

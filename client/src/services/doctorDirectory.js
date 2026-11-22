@@ -1,10 +1,6 @@
 import { patientRequest } from './patientApi.js';
 
-export async function getDoctorDirectory() {
-   const { doctors } = await patientRequest('/doctors');
-   return doctors;
-}
-
+// Signed-in only: one active physician's Doctor Profile.
 export async function getDoctorProfile(id) {
    const { doctor } = await patientRequest(
       '/doctors/' + encodeURIComponent(id),

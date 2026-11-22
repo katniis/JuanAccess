@@ -10,7 +10,7 @@ export const HMO_NOTE = 'Cash price; HMO coverage may lower what you pay.';
 
 export const formatPeso = (amount) => peso.format(Number(amount));
 
-// Public Price List: { procedures, consultationFees }. No sign-in needed.
+// Public Price List: { procedures }. No sign-in needed.
 export function getPriceList() {
    return patientRequest('/price-list');
 }

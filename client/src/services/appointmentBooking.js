@@ -46,6 +46,7 @@ export async function findAvailableAppointments({
          providerName: providerName.startsWith('Dr.')
             ? providerName
             : 'Dr. ' + providerName,
+         consultationFee: slot.consultation_fee ?? null,
          start: slot.start,
          end: slot.end,
          dateLabel: formatClinicDate(slot.start, { weekday: 'short' }),

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import DoctorProfileDialog from '../../components/DoctorProfileDialog.jsx';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
@@ -10,16 +11,8 @@ import {
    bookAppointment,
 } from '../../services/appointmentBooking.js';
 import { getMyPriorAuthorizationStatuses } from '../../services/patientAppointments.js';
-import {
-   doctorName,
-   getDoctorProfile,
-} from '../../services/doctorDirectory.js';
 import { formatClinicDateTime } from '../../services/patientDates.js';
-import {
-   formatPeso,
-   getPriceList,
-   HMO_NOTE,
-} from '../../services/priceList.js';
+import { formatPeso, HMO_NOTE } from '../../services/priceList.js';
 import { usePortalPageReveal } from '../../hooks/usePortalPageReveal.js';
 
 const weekdayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -66,15 +59,8 @@ function BookAppointment() {
    const [bookingResult, setBookingResult] = useState(null);
    const [bookingStage, setBookingStage] = useState(0);
    const [authDraftStatus, setAuthDraftStatus] = useState(null);
-   // Consultation Fee by provider id, from the public Price List.
-   const [consultationFees, setConsultationFees] = useState({});
-   // Set when the patient arrives from a Doctor Profile.
-   const [searchParams, setSearchParams] = useSearchParams();
-   const chosenDoctorId = Number(searchParams.get('doctor')) || null;
-   const [chosenDoctor, setChosenDoctor] = useState(null);
-   const visibleSlots = chosenDoctorId
-      ? slots.filter((slot) => slot.providerId === chosenDoctorId)
-      : slots;
+   // Provider whose Doctor Profile dialog is open, if any.
+   const [profileDoctorId, setProfileDoctorId] = useState(null);
    const pageRef = useRef(null);
    const filteredVisitTypes = visitTypes.filter((visitType) =>
       visitType.name
@@ -97,34 +83,11 @@ function BookAppointment() {
          .finally(() => {
             if (current) setLoading(false);
          });
-      getPriceList()
-         .then(({ consultationFees: fees }) => {
-            if (current)
-               setConsultationFees(
-                  Object.fromEntries(
-                     fees.map((fee) => [fee.id, fee.consultationFee]),
-                  ),
-               );
-         })
-         .catch(() => {
-            // Prices are informational; booking still works without them.
-         });
 
       return () => {
          current = false;
       };
    }, []);
-
-   useEffect(() => {
-      if (!chosenDoctorId) return undefined;
-      let current = true;
-      getDoctorProfile(chosenDoctorId)
-         .then((doctor) => current && setChosenDoctor(doctor))
-         .catch(() => current && setChosenDoctor(null));
-      return () => {
-         current = false;
-      };
-   }, [chosenDoctorId]);
 
    useEffect(() => {
       if (!isBooking) return undefined;
@@ -323,21 +286,6 @@ function BookAppointment() {
          <header className="booking-heading">
             <h1>Book an Appointment</h1>
             <p>Find a time that works for you</p>
-            {chosenDoctorId && (
-               <p className="booking-chosen-doctor">
-                  Showing times with{' '}
-                  <Link to={'/doctors/' + chosenDoctorId}>
-                     {chosenDoctor ? doctorName(chosenDoctor) : 'your doctor'}
-                  </Link>
-                  .{' '}
-                  <button
-                     className="button button-quiet"
-                     type="button"
-                     onClick={() => setSearchParams({})}>
-                     Show all doctors
-                  </button>
-               </p>
-            )}
          </header>
 
          <StepIndicator currentStep={step} />
@@ -550,7 +498,7 @@ function BookAppointment() {
                   />
                )}
 
-               {visibleSlots.length === 0 ? (
+               {slots.length === 0 ? (
                   <section className="empty-slots">
                      <h3>No appointments available right now</h3>
                      <p>
@@ -581,7 +529,7 @@ function BookAppointment() {
                   </section>
                ) : (
                   <div className="slot-list">
-                     {visibleSlots.map((slot) => (
+                     {slots.map((slot) => (
                         <article className="slot-card" key={slot.id}>
                            <div className="slot-date">
                               <span>{slot.monthLabel}</span>
@@ -589,19 +537,22 @@ function BookAppointment() {
                            </div>
                            <div className="slot-details">
                               <strong>
-                                 <Link to={'/doctors/' + slot.providerId}>
+                                 <button
+                                    className="slot-provider"
+                                    type="button"
+                                    aria-haspopup="dialog"
+                                    aria-label={`${slot.providerName}, view Doctor Profile`}
+                                    onClick={() =>
+                                       setProfileDoctorId(slot.providerId)
+                                    }>
                                     {slot.providerName}
-                                 </Link>
+                                 </button>
                               </strong>
                               <span className="slot-time">
                                  {slot.timeLabel}
                               </span>
-                              {consultationFees[slot.providerId] && (
-                                 <span>
-                                    {formatPeso(
-                                       consultationFees[slot.providerId],
-                                    )}
-                                 </span>
+                              {slot.consultationFee != null && (
+                                 <span>{formatPeso(slot.consultationFee)}</span>
                               )}
                            </div>
                            <button
@@ -628,6 +579,13 @@ function BookAppointment() {
                   </button>
                </div>
             </div>
+         )}
+         {profileDoctorId && (
+            <DoctorProfileDialog
+               key={profileDoctorId}
+               doctorId={profileDoctorId}
+               onClose={() => setProfileDoctorId(null)}
+            />
          )}
       </div>
    );

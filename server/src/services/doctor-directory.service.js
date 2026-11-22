@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { providers } from '../db/schema/index.js';
 import { manilaDateString } from '../utils/timezone.js';
@@ -38,15 +38,6 @@ const toDoctorProfile = (row) => ({
    photo_url: row.photoUrl,
    consultation_fee: row.consultationFee,
 });
-
-// shortcut: filters Practitioners in JS (the table is clinic-sized); move to SQL if it grows large.
-export async function listDoctorProfiles() {
-   const rows = await db
-      .select(profileColumns)
-      .from(providers)
-      .orderBy(asc(providers.lastName), asc(providers.firstName));
-   return rows.filter(isListedDoctor).map(toDoctorProfile);
-}
 
 export async function getDoctorProfile(id) {
    const [row] = await db

@@ -1,16 +1,4 @@
-import {
-   getDoctorProfile,
-   listDoctorProfiles,
-} from '../services/doctor-directory.service.js';
-
-export async function getDoctorDirectory(req, res) {
-   try {
-      return res.json({ doctors: await listDoctorProfiles() });
-   } catch (error) {
-      console.error('Failed to list Doctor Directory:', error);
-      return res.status(500).json({ error: 'Failed to load doctors' });
-   }
-}
+import { getDoctorProfile } from '../services/doctor-directory.service.js';
 
 export async function getDoctorProfileHandler(req, res) {
    const id = Number(req.params.id);
