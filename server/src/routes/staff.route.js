@@ -53,6 +53,12 @@ import {
    uploadAdminPractitionerPhoto,
    updateAdminUser,
 } from '../controller/admin.controller.js';
+import {
+   createApePackage,
+   deleteApePackage,
+   listApePackages,
+   updateApePackage,
+} from '../controller/ape-package.controller.js';
 
 const router = express.Router();
 const photoUpload = multer({
@@ -167,6 +173,10 @@ router.delete(
    requireStaffAdmin,
    deleteAdminReference,
 );
+router.get('/admin/ape-packages', requireStaffAdmin, listApePackages);
+router.post('/admin/ape-packages', requireStaffAdmin, createApePackage);
+router.patch('/admin/ape-packages/:id', requireStaffAdmin, updateApePackage);
+router.delete('/admin/ape-packages/:id', requireStaffAdmin, deleteApePackage);
 
 // 6. Insurance Verification (New Patient Handling)
 router.get('/insurance/unverified', requireStaffAdmin, getUnverifiedCoverages);

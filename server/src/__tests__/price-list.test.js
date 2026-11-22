@@ -69,6 +69,7 @@ describe('Price List', () => {
                consultationFee: '800.00',
             },
          ],
+         apePackages: [],
       });
    });
 
@@ -78,6 +79,15 @@ describe('Price List', () => {
       expect(mockSelectLog).toEqual([
          ['procedureCode', 'description', 'standardCost'],
          ['id', 'firstName', 'lastName', 'specialty', 'consultationFee'],
+         [
+            'packageId',
+            'name',
+            'packagePrice',
+            'procedureCode',
+            'description',
+            'standardCost',
+            'sexAtBirth',
+         ],
       ]);
    });
 

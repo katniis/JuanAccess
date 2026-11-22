@@ -20,6 +20,7 @@ import {
    visitTypes,
 } from '../db/schema/index.js';
 import { PROFESSIONS } from '../db/schema/providers.js';
+import { isPesoAmount } from '../utils/money.js';
 import {
    isSupportedPhotoType,
    storePractitionerPhoto,
@@ -67,8 +68,7 @@ const resources = {
       fields: ['procedureCode', 'description', 'standardCost'],
       // Procedure price in PHP, whole centavos only.
       isValid: ({ standardCost }) =>
-         standardCost === undefined ||
-         /^\d{1,8}(\.\d{1,2})?$/.test(String(standardCost)),
+         standardCost === undefined || isPesoAmount(standardCost),
    },
 };
 
