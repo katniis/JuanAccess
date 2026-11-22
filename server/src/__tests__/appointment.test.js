@@ -292,6 +292,7 @@ describe('appointment routes', () => {
          providerId: 7,
          firstName: 'Doc',
          lastName: 'Tor',
+         consultationFee: '800.00',
          dayOfWeek: manilaDayOfWeek(manilaAt(slotDate, '12:00:00')),
          startTime: '09:00:00',
          endTime: '17:00:00',
@@ -385,6 +386,7 @@ describe('appointment routes', () => {
          expect(Array.isArray(body.slots)).toBe(true);
          expect(body.slots.length).toBeGreaterThan(0);
          expect(body.slots[0]).toHaveProperty('provider_id', 7);
+         expect(body.slots[0]).toHaveProperty('consultation_fee', '800.00');
          // Only physicians are consult doctors.
          expect(filteredToPhysicians()).toBe(true);
       });
