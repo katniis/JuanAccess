@@ -1,8 +1,8 @@
 {
    "version": "8",
    "dialect": "postgres",
-   "id": "2917b53c-de85-4d18-bd3a-8c3e037f9dac",
-   "prevIds": ["f0fc9898-e1ae-4509-805f-8521cf37c5d9"],
+   "id": "5e3d1331-8f9f-41db-a5e7-e40a3600a77c",
+   "prevIds": ["1ffad58d-5a84-4e07-b6bf-58cd4415b2cd"],
    "ddl": [
       {
          "isRlsEnabled": false,
@@ -467,7 +467,7 @@
       {
          "type": "integer",
          "typeSchema": null,
-         "notNull": true,
+         "notNull": false,
          "dimensions": 0,
          "default": null,
          "generated": null,
@@ -480,7 +480,7 @@
       {
          "type": "integer",
          "typeSchema": null,
-         "notNull": true,
+         "notNull": false,
          "dimensions": 0,
          "default": null,
          "generated": null,
@@ -564,6 +564,71 @@
          "generated": null,
          "identity": null,
          "name": "insurance_status",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "type": "varchar(40)",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "cancellation_reason",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "type": "text",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "cancellation_reason_text",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "type": "integer",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "cancelled_by_user_id",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "type": "timestamp with time zone",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "cancelled_at",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "type": "text",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "cancellation_letter",
          "entityType": "columns",
          "schema": "public",
          "table": "appointments"
@@ -1973,19 +2038,6 @@
          "table": "patients"
       },
       {
-         "type": "varchar(10)",
-         "typeSchema": null,
-         "notNull": false,
-         "dimensions": 0,
-         "default": null,
-         "generated": null,
-         "identity": null,
-         "name": "sex_at_birth",
-         "entityType": "columns",
-         "schema": "public",
-         "table": "patients"
-      },
-      {
          "type": "varchar(255)",
          "typeSchema": null,
          "notNull": false,
@@ -2909,6 +2961,32 @@
          "table": "users"
       },
       {
+         "type": "integer",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": "0",
+         "generated": null,
+         "identity": null,
+         "name": "failed_login_attempts",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "users"
+      },
+      {
+         "type": "timestamp with time zone",
+         "typeSchema": null,
+         "notNull": false,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "locked_until",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "users"
+      },
+      {
          "type": "timestamp with time zone",
          "typeSchema": null,
          "notNull": true,
@@ -3512,6 +3590,19 @@
          "onUpdate": "NO ACTION",
          "onDelete": "NO ACTION",
          "name": "appointments_visit_type_id_visit_types_id_fkey",
+         "entityType": "fks",
+         "schema": "public",
+         "table": "appointments"
+      },
+      {
+         "nameExplicit": false,
+         "columns": ["cancelled_by_user_id"],
+         "schemaTo": "public",
+         "tableTo": "users",
+         "columnsTo": ["id"],
+         "onUpdate": "NO ACTION",
+         "onDelete": "NO ACTION",
+         "name": "appointments_cancelled_by_user_id_users_id_fkey",
          "entityType": "fks",
          "schema": "public",
          "table": "appointments"

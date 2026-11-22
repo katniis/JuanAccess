@@ -89,12 +89,14 @@ export function buildAttentionItems(
          id: `appointment-${appointment.id}`,
          icon: 'calendar',
          title: `Appointment check-in pending: ${appointment.visitTypeName}`,
-         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} (${genderLabel(appointment.patientGender)}) · Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}`,
+         subtitle: `${fullName(appointment.patientFirstName, appointment.patientLastName)} (${genderLabel(appointment.patientGender)}) · ${appointment.providerFirstName ? `Dr. ${fullName(appointment.providerFirstName, appointment.providerLastName)}` : 'Assigned on the day'}`,
          status: 'Pending',
          tone: 'pending',
          sort: new Date(appointment.scheduledStart).getTime(),
          time: formatTime(appointment.scheduledStart),
-         path: `/staff/schedule?provider=${appointment.providerId}`,
+         path: appointment.providerId
+            ? `/staff/schedule?provider=${appointment.providerId}`
+            : '/staff/schedule',
       });
    }
    return items.sort((a, b) => a.sort - b.sort).slice(0, limit);

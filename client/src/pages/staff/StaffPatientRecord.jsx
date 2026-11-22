@@ -133,7 +133,7 @@ function StaffPatientRecord() {
                               <td>
                                  {appointment.providerFirstName
                                     ? `Dr. ${appointment.providerFirstName} ${appointment.providerLastName}`
-                                    : 'Provider'}
+                                    : 'Assigned on the day'}
                               </td>
                               <td>{appointment.visitTypeName || '—'}</td>
                               <td>{appointment.status}</td>

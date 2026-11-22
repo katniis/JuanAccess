@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { gsap, useGSAP } from '../utils/portalGsap.js';
+import { PATIENT_CANCELLATION_REASONS } from '../services/patientAppointments.js';
 
 function AppointmentCancelDialog({
    appointment,
@@ -10,6 +11,8 @@ function AppointmentCancelDialog({
    const dialogRef = useRef(null);
    const contentRef = useRef(null);
    const [displayAppointment, setDisplayAppointment] = useState(null);
+   const [reason, setReason] = useState('');
+   const [reasonText, setReasonText] = useState('');
 
    useGSAP(
       () => {
@@ -19,7 +22,11 @@ function AppointmentCancelDialog({
          const media = gsap.matchMedia();
 
          if (appointment) {
-            if (!dialog.open) dialog.showModal();
+            if (!dialog.open) {
+               setReason('');
+               setReasonText('');
+               dialog.showModal();
+            }
             media.add('(prefers-reduced-motion: reduce)', () =>
                gsap.set(content, { autoAlpha: 1, y: 0, scale: 1 }),
             );
@@ -51,9 +58,13 @@ function AppointmentCancelDialog({
       setDisplayAppointment(currentAppointment);
       onCancel();
    };
-   const retainAndConfirm = () => {
+   const needsText = reason === 'other';
+   const canConfirm = Boolean(reason) && (!needsText || reasonText.trim());
+   const retainAndConfirm = (event) => {
+      event.preventDefault();
+      if (busy || !canConfirm) return;
       setDisplayAppointment(currentAppointment);
-      onConfirm();
+      onConfirm({ reason, reasonText: needsText ? reasonText.trim() : '' });
    };
 
    return (
@@ -70,7 +81,10 @@ function AppointmentCancelDialog({
             if (event.target === event.currentTarget) retainAndCancel();
          }}>
          {currentAppointment && (
-            <div className="appointment-cancel-dialog-content" ref={contentRef}>
+            <form
+               className="appointment-cancel-dialog-content"
+               ref={contentRef}
+               onSubmit={retainAndConfirm}>
                <h2 id="appointment-cancel-title">Cancel appointment?</h2>
                <p id="appointment-cancel-description">
                   Are you sure you want to cancel this appointment?
@@ -86,6 +100,36 @@ function AppointmentCancelDialog({
                      · {currentAppointment.timeLabel}
                   </span>
                </div>
+               <label className="appointment-cancel-field">
+                  <span>Reason for cancelling</span>
+                  <select
+                     required
+                     value={reason}
+                     disabled={busy}
+                     onChange={(event) => setReason(event.target.value)}>
+                     <option value="" disabled>
+                        Choose a reason
+                     </option>
+                     {PATIENT_CANCELLATION_REASONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                           {option.label}
+                        </option>
+                     ))}
+                  </select>
+               </label>
+               {needsText && (
+                  <label className="appointment-cancel-field">
+                     <span>Tell us more</span>
+                     <textarea
+                        required
+                        rows={3}
+                        maxLength={1000}
+                        value={reasonText}
+                        disabled={busy}
+                        onChange={(event) => setReasonText(event.target.value)}
+                     />
+                  </label>
+               )}
                <div className="appointment-cancel-actions">
                   <button
                      className="button button-light"
@@ -96,13 +140,12 @@ function AppointmentCancelDialog({
                   </button>
                   <button
                      className="button button-danger"
-                     type="button"
-                     disabled={busy}
-                     onClick={retainAndConfirm}>
+                     type="submit"
+                     disabled={busy || !canConfirm}>
                      {busy ? 'Cancelling…' : 'Cancel appointment'}
                   </button>
                </div>
-            </div>
+            </form>
          )}
       </dialog>
    );

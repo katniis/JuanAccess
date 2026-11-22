@@ -3,6 +3,7 @@ import {
    pgTable,
    serial,
    check,
+   text,
    timestamp,
    varchar,
 } from 'drizzle-orm/pg-core';
@@ -12,6 +13,7 @@ import { providers } from './providers.js';
 import { rooms } from './rooms.js';
 import { equipment } from './equipments.js';
 import { visitTypes } from './visitTypes.js';
+import { users } from './users.js';
 
 export const appointments = pgTable(
    'appointments',
@@ -22,13 +24,10 @@ export const appointments = pgTable(
          .notNull()
          .references(() => patients.id),
 
-      providerId: integer('provider_id')
-         .notNull()
-         .references(() => providers.id),
+      // Null for an APE Booking until Station Assignment on the day (ADR 0002).
+      providerId: integer('provider_id').references(() => providers.id),
 
-      roomId: integer('room_id')
-         .notNull()
-         .references(() => rooms.id),
+      roomId: integer('room_id').references(() => rooms.id),
 
       equipmentId: integer('equipment_id').references(() => equipment.id),
 
@@ -53,6 +52,18 @@ export const appointments = pgTable(
       insuranceStatus: varchar('insurance_status', { length: 20 })
          .notNull()
          .default('unverified'),
+
+      cancellationReason: varchar('cancellation_reason', { length: 40 }),
+
+      cancellationReasonText: text('cancellation_reason_text'),
+
+      cancelledByUserId: integer('cancelled_by_user_id').references(
+         () => users.id,
+      ),
+
+      cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+
+      cancellationLetter: text('cancellation_letter'),
 
       createdAt: timestamp('created_at', { withTimezone: true })
          .notNull()

@@ -189,7 +189,7 @@ function AppointmentDrawer({
                   </div>
                   <div>
                      <dt>Room</dt>
-                     <dd>{appointment.roomName || 'Not assigned'}</dd>
+                     <dd>{appointment.roomName || 'Assigned on the day'}</dd>
                   </div>
                   <div>
                      <dt>Equipment</dt>

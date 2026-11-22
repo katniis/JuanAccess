@@ -138,7 +138,7 @@ export function mapPatientAppointment(appointment) {
       id: appointment.id,
       providerName: appointment.providerFirst
          ? 'Dr. ' + appointment.providerFirst + ' ' + appointment.providerLast
-         : 'Provider',
+         : 'Assigned on the day',
       visitType: appointment.visitTypeName || 'Appointment',
       scheduledStart: appointment.scheduledStart,
       scheduledEnd: appointment.scheduledEnd,
@@ -167,6 +167,18 @@ export function mapPatientAppointment(appointment) {
    };
 }
 
-export function cancelPatientAppointment(id) {
-   return patientRequest('/appointment/' + id, { method: 'DELETE' });
+export const PATIENT_CANCELLATION_REASONS = [
+   { value: 'schedule_conflict', label: 'Schedule conflict' },
+   { value: 'feeling_better', label: 'Feeling better' },
+   { value: 'cost', label: 'Cost' },
+   { value: 'found_another_clinic', label: 'Found another clinic' },
+   { value: 'transport', label: 'Transport' },
+   { value: 'other', label: 'Other' },
+];
+
+export function cancelPatientAppointment(id, { reason, reasonText }) {
+   return patientRequest('/appointment/' + id, {
+      method: 'DELETE',
+      body: { reason, reasonText },
+   });
 }
