@@ -14,6 +14,10 @@ import { createPriorAuthorizationForAppointment } from './prior-auth.service.js'
 export const WAITLIST_OFFER_MINUTES = 30;
 
 export async function offerNextWaitlistEntry(tx, freedAppointment) {
+   // APE Bookings have no Practitioner and no waitlist.
+   if (!freedAppointment.providerId) {
+      return null;
+   }
    const [provider] = await tx
       .select({ specialty: providers.specialty })
       .from(providers)
