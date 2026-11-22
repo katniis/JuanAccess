@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
 import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
@@ -10,6 +10,10 @@ import {
    bookAppointment,
 } from '../../services/appointmentBooking.js';
 import { getMyPriorAuthorizationStatuses } from '../../services/patientAppointments.js';
+import {
+   doctorName,
+   getDoctorProfile,
+} from '../../services/doctorDirectory.js';
 import { formatClinicDateTime } from '../../services/patientDates.js';
 import {
    formatPeso,
@@ -64,6 +68,13 @@ function BookAppointment() {
    const [authDraftStatus, setAuthDraftStatus] = useState(null);
    // Consultation Fee by provider id, from the public Price List.
    const [consultationFees, setConsultationFees] = useState({});
+   // Set when the patient arrives from a Doctor Profile.
+   const [searchParams, setSearchParams] = useSearchParams();
+   const chosenDoctorId = Number(searchParams.get('doctor')) || null;
+   const [chosenDoctor, setChosenDoctor] = useState(null);
+   const visibleSlots = chosenDoctorId
+      ? slots.filter((slot) => slot.providerId === chosenDoctorId)
+      : slots;
    const pageRef = useRef(null);
    const filteredVisitTypes = visitTypes.filter((visitType) =>
       visitType.name
@@ -103,6 +114,17 @@ function BookAppointment() {
          current = false;
       };
    }, []);
+
+   useEffect(() => {
+      if (!chosenDoctorId) return undefined;
+      let current = true;
+      getDoctorProfile(chosenDoctorId)
+         .then((doctor) => current && setChosenDoctor(doctor))
+         .catch(() => current && setChosenDoctor(null));
+      return () => {
+         current = false;
+      };
+   }, [chosenDoctorId]);
 
    useEffect(() => {
       if (!isBooking) return undefined;
@@ -301,6 +323,21 @@ function BookAppointment() {
          <header className="booking-heading">
             <h1>Book an Appointment</h1>
             <p>Find a time that works for you</p>
+            {chosenDoctorId && (
+               <p className="booking-chosen-doctor">
+                  Showing times with{' '}
+                  <Link to={'/doctors/' + chosenDoctorId}>
+                     {chosenDoctor ? doctorName(chosenDoctor) : 'your doctor'}
+                  </Link>
+                  .{' '}
+                  <button
+                     className="button button-quiet"
+                     type="button"
+                     onClick={() => setSearchParams({})}>
+                     Show all doctors
+                  </button>
+               </p>
+            )}
          </header>
 
          <StepIndicator currentStep={step} />
@@ -513,7 +550,7 @@ function BookAppointment() {
                   />
                )}
 
-               {slots.length === 0 ? (
+               {visibleSlots.length === 0 ? (
                   <section className="empty-slots">
                      <h3>No appointments available right now</h3>
                      <p>
@@ -544,14 +581,18 @@ function BookAppointment() {
                   </section>
                ) : (
                   <div className="slot-list">
-                     {slots.map((slot) => (
+                     {visibleSlots.map((slot) => (
                         <article className="slot-card" key={slot.id}>
                            <div className="slot-date">
                               <span>{slot.monthLabel}</span>
                               <strong>{slot.dayLabel}</strong>
                            </div>
                            <div className="slot-details">
-                              <strong>{slot.providerName}</strong>
+                              <strong>
+                                 <Link to={'/doctors/' + slot.providerId}>
+                                    {slot.providerName}
+                                 </Link>
+                              </strong>
                               <span className="slot-time">
                                  {slot.timeLabel}
                               </span>

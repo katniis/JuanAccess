@@ -1,8 +1,8 @@
 {
    "version": "8",
    "dialect": "postgres",
-   "id": "24f53c33-8d13-4e74-b6c6-cff540e11156",
-   "prevIds": ["92391a43-8547-4ed4-ae13-99a8f2b52cb0"],
+   "id": "9fa164a0-372c-4329-9198-ab8a0fc6e76e",
+   "prevIds": ["327dbf43-af4b-4b3e-a96a-b5f20a42011e"],
    "ddl": [
       {
          "isRlsEnabled": false,
@@ -31,6 +31,12 @@
       {
          "isRlsEnabled": false,
          "name": "appointments",
+         "entityType": "tables",
+         "schema": "public"
+      },
+      {
+         "isRlsEnabled": false,
+         "name": "arrival_windows",
          "entityType": "tables",
          "schema": "public"
       },
@@ -805,6 +811,71 @@
          "entityType": "columns",
          "schema": "public",
          "table": "appointments"
+      },
+      {
+         "type": "serial",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "id",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "arrival_windows"
+      },
+      {
+         "type": "varchar(100)",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "name",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "arrival_windows"
+      },
+      {
+         "type": "time",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "start_time",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "arrival_windows"
+      },
+      {
+         "type": "time",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": null,
+         "generated": null,
+         "identity": null,
+         "name": "end_time",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "arrival_windows"
+      },
+      {
+         "type": "boolean",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": "true",
+         "generated": null,
+         "identity": null,
+         "name": "is_active",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "arrival_windows"
       },
       {
          "type": "serial",
@@ -1660,6 +1731,32 @@
          "generated": null,
          "identity": null,
          "name": "standard_cost",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "fee_schedule"
+      },
+      {
+         "type": "smallint",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 1,
+         "default": "'{}'",
+         "generated": null,
+         "identity": null,
+         "name": "offered_days",
+         "entityType": "columns",
+         "schema": "public",
+         "table": "fee_schedule"
+      },
+      {
+         "type": "integer",
+         "typeSchema": null,
+         "notNull": true,
+         "dimensions": 0,
+         "default": "0",
+         "generated": null,
+         "identity": null,
+         "name": "capacity_per_window",
          "entityType": "columns",
          "schema": "public",
          "table": "fee_schedule"
@@ -4717,6 +4814,14 @@
       {
          "columns": ["id"],
          "nameExplicit": false,
+         "name": "arrival_windows_pkey",
+         "schema": "public",
+         "table": "arrival_windows",
+         "entityType": "pks"
+      },
+      {
+         "columns": ["id"],
+         "nameExplicit": false,
          "name": "audit_log_pkey",
          "schema": "public",
          "table": "audit_log",
@@ -5081,6 +5186,13 @@
          "table": "appointments"
       },
       {
+         "value": "\"start_time\" < \"end_time\"",
+         "name": "arrival_windows_hours_check",
+         "entityType": "checks",
+         "schema": "public",
+         "table": "arrival_windows"
+      },
+      {
          "value": "\"status\" IN ('processing', 'processed', 'disputed', 'resolved')",
          "name": "bills_status_check",
          "entityType": "checks",
@@ -5093,6 +5205,20 @@
          "entityType": "checks",
          "schema": "public",
          "table": "duty_schedule_overrides"
+      },
+      {
+         "value": "\"capacity_per_window\" >= 0",
+         "name": "fee_schedule_capacity_per_window_check",
+         "entityType": "checks",
+         "schema": "public",
+         "table": "fee_schedule"
+      },
+      {
+         "value": "\"offered_days\" <@ ARRAY[0,1,2,3,4,5,6]::smallint[]",
+         "name": "fee_schedule_offered_days_check",
+         "entityType": "checks",
+         "schema": "public",
+         "table": "fee_schedule"
       },
       {
          "value": "\"status\" IN ('unverified', 'active', 'inactive')",

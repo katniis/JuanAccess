@@ -33,6 +33,7 @@ import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import PriceList from './pages/PriceList.jsx';
+import { DoctorDirectory, DoctorProfile } from './pages/DoctorDirectory.jsx';
 import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
@@ -198,6 +199,11 @@ function App() {
                   />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/prices" element={<PriceList />} />
+                  <Route path="/doctors" element={<DoctorDirectory />} />
+                  <Route
+                     path="/doctors/:doctorId"
+                     element={<DoctorProfile />}
+                  />
                   <Route
                      path="/forgot-password"
                      element={<AccountRecoveryPage mode="forgot" />}
