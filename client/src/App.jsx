@@ -31,6 +31,7 @@ import StaffPriorAuth from './pages/staff/StaffPriorAuth.jsx';
 import StaffPatientRecord from './pages/staff/StaffPatientRecord.jsx';
 import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
+import StaffApeQueue from './pages/staff/StaffApeQueue.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import PriceList from './pages/PriceList.jsx';
@@ -227,6 +228,7 @@ function App() {
                      <Route index element={<StaffDashboard />} />
                      <Route path="schedule" element={<StaffSchedule />} />
                      <Route path="slots" element={<StaffSlotManagement />} />
+                     <Route path="ape-queue" element={<StaffApeQueue />} />
                      <Route path="prior-auth" element={<StaffPriorAuth />} />
                      <Route path="appeals" element={<StaffAppeals />} />
                      <Route path="disputes" element={<StaffDisputes />} />

@@ -63,6 +63,11 @@ import {
    listApePackages,
    updateApePackage,
 } from '../controller/ape-package.controller.js';
+import {
+   assignStation,
+   getApeQueue,
+   listEligiblePractitioners,
+} from '../controller/station-assignment.controller.js';
 
 const router = express.Router();
 const photoUpload = multer({
@@ -111,6 +116,12 @@ router.post(
 );
 router.patch('/appointments/:id/reschedule', rescheduleAppointmentStaff);
 router.get('/waitlist', getWaitlistMonitor);
+router.get('/ape-queue', getApeQueue);
+router.get(
+   '/ape-queue/procedures/:id/practitioners',
+   listEligiblePractitioners,
+);
+router.post('/ape-queue/procedures/:id/assignment', assignStation);
 router.get(
    '/reports/cancellations',
    requireStaffAdmin,

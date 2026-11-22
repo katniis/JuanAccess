@@ -28,6 +28,7 @@ export { feeSchedule } from './feeSchedule.js';
 export { apePackages, apePackageProcedures } from './apePackages.js';
 export { arrivalWindows } from './arrivalWindows.js';
 export { apeBookingProcedures } from './apeBookingProcedures.js';
+export { stationAssignments } from './stationAssignments.js';
 export { preVisitSummaries } from './preVisitSummaries.js';
 export { bills } from './bills.js';
 export { billLineItems } from './billLineItems.js';

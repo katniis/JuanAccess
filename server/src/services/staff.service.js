@@ -741,6 +741,13 @@ export async function staffRescheduleAppointment(
             .limit(1);
 
          if (!appointment) return { error: 'not_found' };
+         // APE Bookings get Practitioners per Procedure via Station Assignment (ADR 0002).
+         if (
+            appointment.apePackageId &&
+            (newProviderId || newRoomId || newEquipmentId)
+         ) {
+            return { error: 'ape_booking' };
+         }
 
          const providerId = newProviderId ?? appointment.providerId;
          const roomId = newRoomId ?? appointment.roomId;

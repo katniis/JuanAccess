@@ -4,6 +4,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.jsx';
 import { usePortalFeedback } from '../../contexts/usePortalFeedback.js';
 import { getFeeSchedule } from '../../services/priceList.js';
 import {
+   PROFESSIONS,
    WEEKDAYS,
    deleteArrivalWindow,
    getArrivalWindows,
@@ -229,8 +230,9 @@ function StaffApeCapacity() {
                <div>
                   <h2>Procedure capacity</h2>
                   <p>
-                     The days each Procedure is offered and how many patients it
-                     can take in each Arrival Window.
+                     The days each Procedure is offered, how many patients it
+                     can take in each Arrival Window, and which Professions may
+                     perform it at a Station Assignment.
                   </p>
                </div>
             </header>
@@ -240,7 +242,10 @@ function StaffApeCapacity() {
                      <thead>
                         <tr>
                            <th>Procedure</th>
-                           <th>Offered days and capacity per window</th>
+                           <th>
+                              Offered days, capacity per window and allowed
+                              Professions
+                           </th>
                         </tr>
                      </thead>
                      <tbody>
@@ -269,7 +274,17 @@ function StaffApeCapacity() {
 function ProcedureCapacityForm({ procedure, notify }) {
    const [days, setDays] = useState(procedure.offeredDays ?? []);
    const [capacity, setCapacity] = useState(procedure.capacityPerWindow ?? 0);
+   const [professions, setProfessions] = useState(
+      procedure.allowedProfessions ?? [],
+   );
    const [pending, setPending] = useState(false);
+
+   const toggleProfession = (profession) =>
+      setProfessions((list) =>
+         list.includes(profession)
+            ? list.filter((p) => p !== profession)
+            : [...list, profession],
+      );
 
    const toggleDay = (day) =>
       setDays((list) =>
@@ -282,10 +297,15 @@ function ProcedureCapacityForm({ procedure, notify }) {
       event.preventDefault();
       setPending(true);
       try {
-         await saveProcedureCapacity(procedure.id, days, Number(capacity));
+         await saveProcedureCapacity(
+            procedure.id,
+            days,
+            Number(capacity),
+            professions,
+         );
          notify({
             type: 'success',
-            message: `${procedure.description} capacity saved.`,
+            message: `${procedure.description} settings saved.`,
          });
       } catch (requestError) {
          notify({ type: 'error', message: requestError.message });
@@ -306,6 +326,21 @@ function ProcedureCapacityForm({ procedure, notify }) {
                      type="checkbox"
                      checked={days.includes(day)}
                      onChange={() => toggleDay(day)}
+                  />{' '}
+                  {label}{' '}
+               </label>
+            ))}
+         </fieldset>
+         <fieldset>
+            <legend className="sr-only">
+               Professions allowed to perform {procedure.description}
+            </legend>
+            {PROFESSIONS.map(([value, label]) => (
+               <label key={value}>
+                  <input
+                     type="checkbox"
+                     checked={professions.includes(value)}
+                     onChange={() => toggleProfession(value)}
                   />{' '}
                   {label}{' '}
                </label>

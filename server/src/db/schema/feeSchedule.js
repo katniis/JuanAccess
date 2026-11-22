@@ -30,6 +30,11 @@ export const feeSchedule = pgTable(
          .default(sql`'{}'::smallint[]`),
       // Patients the Procedure's station can take in each Arrival Window.
       capacityPerWindow: integer('capacity_per_window').notNull().default(0),
+      // Professions allowed to perform the Procedure at a Station Assignment.
+      allowedProfessions: varchar('allowed_professions', { length: 30 })
+         .array()
+         .notNull()
+         .default(sql`'{}'::varchar[]`),
    },
    (table) => [
       check(
@@ -39,6 +44,10 @@ export const feeSchedule = pgTable(
       check(
          'fee_schedule_offered_days_check',
          sql`${table.offeredDays} <@ ARRAY[0,1,2,3,4,5,6]::smallint[]`,
+      ),
+      check(
+         'fee_schedule_allowed_professions_check',
+         sql`${table.allowedProfessions} <@ ARRAY['physician','nurse','medical_technologist','radiologic_technologist']::varchar[]`,
       ),
    ],
 );

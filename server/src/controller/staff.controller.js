@@ -424,6 +424,12 @@ export const rescheduleAppointmentStaff = async (req, res) => {
          });
       }
 
+      if (result.error === 'ape_booking') {
+         return res.status(409).json({
+            error: 'An APE Booking has no Practitioner, room, or equipment; assign Practitioners per Procedure through Station Assignment.',
+         });
+      }
+
       if (result.error === 'conflict') {
          return res.status(409).json({
             error: `Scheduling conflict: ${result.conflictType} is already booked at the requested time`,

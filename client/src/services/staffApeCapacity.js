@@ -25,9 +25,21 @@ export function deleteArrivalWindow(id) {
    });
 }
 
-export function saveProcedureCapacity(id, offeredDays, capacityPerWindow) {
+export const PROFESSIONS = [
+   ['physician', 'Physician'],
+   ['nurse', 'Nurse'],
+   ['medical_technologist', 'Medical technologist'],
+   ['radiologic_technologist', 'Radiologic technologist'],
+];
+
+export function saveProcedureCapacity(
+   id,
+   offeredDays,
+   capacityPerWindow,
+   allowedProfessions,
+) {
    return staffRequest(`/staff/admin/reference/fee-schedule/${id}`, {
       method: 'PATCH',
-      body: { offeredDays, capacityPerWindow },
+      body: { offeredDays, capacityPerWindow, allowedProfessions },
    });
 }

@@ -72,11 +72,22 @@ const resources = {
          'standardCost',
          'offeredDays',
          'capacityPerWindow',
+         'allowedProfessions',
       ],
       // Procedure price in PHP, whole centavos only; offered days are distinct
-      // 0 (Sunday) … 6 (Saturday); capacity per Arrival Window is a whole number ≥ 0.
-      isValid: ({ standardCost, offeredDays, capacityPerWindow }) =>
+      // 0 (Sunday) … 6 (Saturday); capacity per Arrival Window is a whole number ≥ 0;
+      // allowed Professions are distinct known Professions.
+      isValid: ({
+         standardCost,
+         offeredDays,
+         capacityPerWindow,
+         allowedProfessions,
+      }) =>
          (standardCost === undefined || isPesoAmount(standardCost)) &&
+         (allowedProfessions === undefined ||
+            (Array.isArray(allowedProfessions) &&
+               new Set(allowedProfessions).size === allowedProfessions.length &&
+               allowedProfessions.every((p) => PROFESSIONS.includes(p)))) &&
          (offeredDays === undefined ||
             (Array.isArray(offeredDays) &&
                new Set(offeredDays).size === offeredDays.length &&
