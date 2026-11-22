@@ -13,6 +13,8 @@ export const mockMutationLog = [];
 export const mockResendConfig = { configured: false };
 // Column keys of each db.select({...}) call, in order.
 export const mockSelectLog = [];
+// Conditions passed to each .where(...) call, in order (render with PgDialect).
+export const mockWhereLog = [];
 
 jest.unstable_mockModule(
    '../services/email.service.js',
@@ -30,7 +32,10 @@ jest.unstable_mockModule('../db/index.js', () => {
    const make = (value) => {
       const node = {
          from: () => make(value),
-         where: () => make(value),
+         where: (condition) => {
+            mockWhereLog.push(condition);
+            return make(value);
+         },
          limit: () => make(value),
          orderBy: () => make(value),
          for: () => make(value),
@@ -129,6 +134,7 @@ export const resetMocks = () => {
    mockQueryQueue.length = 0;
    mockMutationLog.length = 0;
    mockSelectLog.length = 0;
+   mockWhereLog.length = 0;
    mockResendConfig.configured = false;
    mockSendEmail.mockReset().mockResolvedValue({ id: 'email-test' });
 };

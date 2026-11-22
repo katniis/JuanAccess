@@ -5,10 +5,23 @@ import {
    resetMocks,
    mockQueryQueue,
    mockMutationLog,
+   mockWhereLog,
    postJson,
 } from './helpers.js';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 const secret = process.env.JWT_SECRET;
+
+// True when some .where() filtered on providers.profession = 'physician'.
+const filteredToPhysicians = () =>
+   mockWhereLog.some((condition) => {
+      if (!condition) return false;
+      const { sql, params } = new PgDialect().sqlToQuery(condition);
+      return (
+         /"providers"\."profession" = \$\d+/.test(sql) &&
+         params.includes('physician')
+      );
+   });
 
 const patientUser = {
    id: 1,
@@ -304,6 +317,8 @@ describe('appointment routes', () => {
          expect(Array.isArray(body.slots)).toBe(true);
          expect(body.slots.length).toBeGreaterThan(0);
          expect(body.slots[0]).toHaveProperty('provider_id', 7);
+         // Only physicians are consult doctors; other Professions staff APE stations.
+         expect(filteredToPhysicians()).toBe(true);
       });
    });
 
@@ -392,6 +407,7 @@ describe('appointment routes', () => {
          expect(await readJson(res)).toEqual({
             error: 'Provider is unavailable for this visit type or day',
          });
+         expect(filteredToPhysicians()).toBe(true);
       });
 
       it('returns 201 and creates the appointment', async () => {

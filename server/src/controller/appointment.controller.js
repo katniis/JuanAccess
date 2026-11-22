@@ -135,14 +135,16 @@ export const getAvailableSlots = async (req, res) => {
             providerAvailability,
             eq(providerAvailability.providerId, providers.id),
          );
-      const eligibleProviders = await (requiredSpecialty
-         ? providerQuery.where(
-              and(
-                 eq(providers.isActive, true),
-                 eq(providers.specialty, requiredSpecialty),
-              ),
-           )
-         : providerQuery.where(eq(providers.isActive, true)));
+      // Consults are booked only with physicians (other Professions staff APE stations).
+      const eligibleProviders = await providerQuery.where(
+         and(
+            eq(providers.isActive, true),
+            eq(providers.profession, 'physician'),
+            requiredSpecialty
+               ? eq(providers.specialty, requiredSpecialty)
+               : undefined,
+         ),
+      );
 
       const busy = await db
          .select({
@@ -285,6 +287,7 @@ export const createAppointment = async (req, res) => {
                   and(
                      eq(providers.id, Number(providerId)),
                      eq(providers.isActive, true),
+                     eq(providers.profession, 'physician'),
                      requiredSpecialty
                         ? eq(providers.specialty, requiredSpecialty)
                         : undefined,
