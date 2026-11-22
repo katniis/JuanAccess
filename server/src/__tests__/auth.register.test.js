@@ -4,8 +4,8 @@ import {
    getCookie,
    resetMocks,
    mockQueryQueue,
-   postJson,
    mockMutationLog,
+   postJson,
 } from './helpers.js';
 import { PRIVACY_POLICY_VERSION } from '../utils/privacyPolicy.js';
 
@@ -16,6 +16,7 @@ const validBody = {
    last_name: 'Patient',
    date_of_birth: '1990-01-01',
    gender: 'female',
+   sex_at_birth: 'female',
    contact_phone: '555-0100',
    address: '123 Main St',
    privacy_consent: true,
@@ -124,6 +125,39 @@ describe('POST /auth/register', () => {
          });
       },
    );
+
+   it.each([
+      ['missing gender', { gender: undefined }],
+      ['invalid gender', { gender: 'unknown' }],
+      ['missing Sex at Birth', { sex_at_birth: undefined }],
+      ['invalid Sex at Birth', { sex_at_birth: 'prefer_not_to_say' }],
+   ])('returns 400 for %s', async (_label, override) => {
+      const res = await postJson(ctx.baseUrl, '/auth/register', {
+         ...validBody,
+         ...override,
+      });
+
+      expect(res.status).toBe(400);
+      expect(await readJson(res)).toEqual({
+         message: 'Gender and Sex at Birth are required.',
+      });
+   });
+
+   it('accepts "Prefer not to say" as gender and stores Sex at Birth', async () => {
+      mockQueryQueue.push([], [{ id: 101 }], [createdUser], []);
+
+      const res = await postJson(ctx.baseUrl, '/auth/register', {
+         ...validBody,
+         gender: 'prefer_not_to_say',
+         sex_at_birth: 'male',
+      });
+
+      expect(res.status).toBe(201);
+      expect(mockMutationLog[0].values).toMatchObject({
+         gender: 'prefer_not_to_say',
+         sexAtBirth: 'male',
+      });
+   });
 
    it('returns 400 when the body is empty', async () => {
       const res = await fetch(`${ctx.baseUrl}/auth/register`, {

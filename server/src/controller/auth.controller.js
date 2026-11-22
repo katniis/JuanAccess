@@ -56,6 +56,9 @@ const generateToken = (
 
 const passwordRounds = 10;
 
+const genders = ['female', 'male', 'nonbinary', 'other', 'prefer_not_to_say'];
+const sexesAtBirth = ['female', 'male'];
+
 const findUserByEmail = async (email) => {
    const [user] = await db
       .select()
@@ -84,6 +87,7 @@ export const patientRegister = async (req, res) => {
          last_name: lastName,
          date_of_birth: dateOfBirth,
          gender,
+         sex_at_birth: sexAtBirth,
          contact_phone: contactPhone,
          address,
          insurer_name: insurerName,
@@ -105,6 +109,11 @@ export const patientRegister = async (req, res) => {
       }
       if (!isValidDate(dateOfBirth)) {
          return res.status(400).json({ message: 'Invalid date of birth.' });
+      }
+      if (!genders.includes(gender) || !sexesAtBirth.includes(sexAtBirth)) {
+         return res
+            .status(400)
+            .json({ message: 'Gender and Sex at Birth are required.' });
       }
 
       const hasInsurance = [
@@ -145,6 +154,7 @@ export const patientRegister = async (req, res) => {
                lastName,
                dateOfBirth,
                gender,
+               sexAtBirth,
                contactEmail: email,
                contactPhone,
                address,
@@ -488,6 +498,7 @@ const settingsColumns = {
    lastName: patients.lastName,
    dateOfBirth: patients.dateOfBirth,
    gender: patients.gender,
+   sexAtBirth: patients.sexAtBirth,
    contactPhone: patients.contactPhone,
    address: patients.address,
 };
@@ -506,6 +517,7 @@ async function loadSettings(userId) {
       lastName,
       dateOfBirth,
       gender,
+      sexAtBirth,
       contactPhone,
       address,
       ...account
@@ -520,6 +532,7 @@ async function loadSettings(userId) {
                  lastName,
                  dateOfBirth,
                  gender,
+                 sexAtBirth,
                  contactPhone,
                  address,
               }
@@ -567,6 +580,7 @@ export const patchSettings = async (req, res) => {
       'firstName',
       'lastName',
       'gender',
+      'sexAtBirth',
       'contactPhone',
       'address',
    ];
@@ -589,14 +603,23 @@ export const patchSettings = async (req, res) => {
    const patientValues = {};
    for (const field of patientFields) {
       if (body[field] === undefined) continue;
+      if (field === 'gender' || field === 'sexAtBirth') {
+         // Optional to send (existing patients aren't blocked), but never cleared.
+         if (
+            !(field === 'gender' ? genders : sexesAtBirth).includes(body[field])
+         )
+            return res
+               .status(400)
+               .json({ error: 'Profile details are invalid.' });
+         patientValues[field] = body[field];
+         continue;
+      }
       const maxLength =
          field === 'firstName' || field === 'lastName'
             ? 100
-            : field === 'gender'
-              ? 20
-              : field === 'contactPhone'
-                ? 30
-                : 1000;
+            : field === 'contactPhone'
+              ? 30
+              : 1000;
       const value = body[field];
       if (typeof value !== 'string' || value.trim().length > maxLength) {
          return res.status(400).json({ error: 'Profile details are invalid.' });
