@@ -138,7 +138,7 @@ export function mapPatientAppointment(appointment) {
       id: appointment.id,
       providerName: appointment.providerFirst
          ? 'Dr. ' + appointment.providerFirst + ' ' + appointment.providerLast
-         : 'Provider',
+         : 'Assigned on the day',
       visitType: appointment.visitTypeName || 'Appointment',
       scheduledStart: appointment.scheduledStart,
       scheduledEnd: appointment.scheduledEnd,

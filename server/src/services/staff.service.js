@@ -103,7 +103,7 @@ export async function getStaffDashboardSnapshot() {
       })
       .from(appointments)
       .innerJoin(patients, eq(patients.id, appointments.patientId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
       .leftJoin(rooms, eq(rooms.id, appointments.roomId))
       .leftJoin(
@@ -344,7 +344,7 @@ export async function getPatientDetailWithChart(patientId) {
       })
       .from(appointments)
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .where(eq(appointments.patientId, patientId))
       .orderBy(desc(appointments.scheduledStart))
       .limit(20);
@@ -388,7 +388,7 @@ export async function getAppointmentPreVisitClinicalData(appointmentId) {
       })
       .from(appointments)
       .innerJoin(patients, eq(patients.id, appointments.patientId))
-      .innerJoin(providers, eq(providers.id, appointments.providerId))
+      .leftJoin(providers, eq(providers.id, appointments.providerId))
       .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
       .leftJoin(rooms, eq(rooms.id, appointments.roomId))
       .leftJoin(equipment, eq(equipment.id, appointments.equipmentId))
@@ -740,17 +740,19 @@ export async function staffRescheduleAppointment(
             gte(appointments.scheduledEnd, scheduledStart),
          ];
 
-         // Provider conflict
-         const [providerConflict] = await tx
-            .select({ id: appointments.id })
-            .from(appointments)
-            .where(
-               and(
-                  ...conflictConditions,
-                  eq(appointments.providerId, providerId),
-               ),
-            )
-            .limit(1);
+         // Provider conflict (an APE Booking has no Practitioner yet)
+         const [providerConflict] = providerId
+            ? await tx
+                 .select({ id: appointments.id })
+                 .from(appointments)
+                 .where(
+                    and(
+                       ...conflictConditions,
+                       eq(appointments.providerId, providerId),
+                    ),
+                 )
+                 .limit(1)
+            : [];
 
          if (providerConflict) {
             return {

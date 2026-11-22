@@ -494,7 +494,7 @@ export const getMyAppointments = async (req, res) => {
             visitTypeName: visitTypes.name,
          })
          .from(appointments)
-         .innerJoin(providers, eq(providers.id, appointments.providerId))
+         .leftJoin(providers, eq(providers.id, appointments.providerId))
          .innerJoin(visitTypes, eq(visitTypes.id, appointments.visitTypeId))
          .leftJoin(
             priorAuthorizations,

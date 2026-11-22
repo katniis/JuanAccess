@@ -24,13 +24,10 @@ export const appointments = pgTable(
          .notNull()
          .references(() => patients.id),
 
-      providerId: integer('provider_id')
-         .notNull()
-         .references(() => providers.id),
+      // Null for an APE Booking until Station Assignment on the day (ADR 0002).
+      providerId: integer('provider_id').references(() => providers.id),
 
-      roomId: integer('room_id')
-         .notNull()
-         .references(() => rooms.id),
+      roomId: integer('room_id').references(() => rooms.id),
 
       equipmentId: integer('equipment_id').references(() => equipment.id),
 
