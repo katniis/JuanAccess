@@ -59,6 +59,9 @@ export const users = pgTable(
 
       totpEnabledAt: timestamp('totp_enabled_at', { withTimezone: true }),
 
+      // Last accepted TOTP time step; codes at or before it are replays.
+      totpLastUsedStep: integer('totp_last_used_step'),
+
       createdAt: timestamp('created_at', {
          withTimezone: true,
       })

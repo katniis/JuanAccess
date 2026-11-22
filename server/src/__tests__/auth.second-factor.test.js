@@ -136,7 +136,7 @@ describe('Staff Second Factor', () => {
 
    describe('POST /auth/second-factor/verify', () => {
       it('completes login with a valid code: 12-hour session, notification, audit', async () => {
-         mockQueryQueue.push([staffRow], [{ id: 99 }]);
+         mockQueryQueue.push([staffRow], [{ id: 7 }], [{ id: 99 }]);
 
          const res = await postJson(
             ctx.baseUrl,
@@ -146,6 +146,9 @@ describe('Staff Second Factor', () => {
          );
 
          expect(res.status).toBe(200);
+         expect(mockMutationLog).toContainEqual({
+            set: { totpLastUsedStep: Math.floor(Date.now() / 30_000) },
+         });
          expect((await readJson(res)).user).toEqual(
             expect.objectContaining({ id: 7, role: 'staff' }),
          );
@@ -157,6 +160,44 @@ describe('Staff Second Factor', () => {
             values: expect.objectContaining({ userId: 7, type: 'new_login' }),
          });
          audited('login_success');
+      });
+
+      it('rejects a replayed code from an already-used time step', async () => {
+         mockQueryQueue.push(
+            [
+               {
+                  ...staffRow,
+                  totpLastUsedStep: Math.floor(Date.now() / 30_000),
+               },
+            ],
+            [{ attempts: 1 }],
+         );
+
+         const res = await postJson(
+            ctx.baseUrl,
+            '/auth/second-factor/verify',
+            { code: codeFor(testSecret) },
+            { cookie: pendingCookie('second_factor') },
+         );
+
+         expect(res.status).toBe(401);
+         expect(getCookie(res, 'token')).toBeNull();
+         audited('second_factor_failed');
+      });
+
+      it('rejects a code another request claimed first', async () => {
+         // The guarded step update matched no row: a concurrent sign-in used it.
+         mockQueryQueue.push([staffRow], [], [{ attempts: 1 }]);
+
+         const res = await postJson(
+            ctx.baseUrl,
+            '/auth/second-factor/verify',
+            { code: codeFor(testSecret) },
+            { cookie: pendingCookie('second_factor') },
+         );
+
+         expect(res.status).toBe(401);
+         expect(getCookie(res, 'token')).toBeNull();
       });
 
       it('rejects a wrong code and counts it toward lockout', async () => {
@@ -395,7 +436,11 @@ describe('Staff Second Factor', () => {
             expect(row.codeHash).toMatch(/^[a-f0-9]{64}$/);
          }
          expect(mockMutationLog).toContainEqual({
-            set: expect.objectContaining({ totpEnabledAt: expect.any(Date) }),
+            set: expect.objectContaining({
+               totpEnabledAt: expect.any(Date),
+               // The setup code cannot be replayed at the next sign-in.
+               totpLastUsedStep: Math.floor(Date.now() / 30_000),
+            }),
          });
          const { exp, iat } = jwt.decode(getCookie(res, 'token'));
          expect(exp - iat).toBe(12 * 60 * 60);

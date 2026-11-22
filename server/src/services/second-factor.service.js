@@ -39,10 +39,14 @@ export const newTotpSecret = () => new Secret({ size: 20 }).base32;
 
 export const totpUri = (secret, email) => totp(secret, email).toString();
 
-export const isValidTotp = (secret, code) =>
-   typeof code === 'string' &&
-   /^\d{6}$/.test(code) &&
-   totp(secret).validate({ token: code, window: 1 }) !== null;
+// Returns the time step the code belongs to, or null when the code is invalid.
+export const totpStep = (secret, code) => {
+   if (typeof code !== 'string' || !/^\d{6}$/.test(code)) return null;
+   const timestamp = Date.now();
+   const generator = totp(secret);
+   const delta = generator.validate({ token: code, timestamp, window: 1 });
+   return delta === null ? null : generator.counter({ timestamp }) + delta;
+};
 
 const normalizeRecoveryCode = (code) =>
    String(code)

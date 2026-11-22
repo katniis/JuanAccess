@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { patients } from '../db/schema/patients.js';
 import { providers } from '../db/schema/providers.js';
@@ -24,9 +24,9 @@ import {
    decryptSecret,
    encryptSecret,
    hashRecoveryCode,
-   isValidTotp,
    newRecoveryCodes,
    newTotpSecret,
+   totpStep,
    totpUri,
 } from '../services/second-factor.service.js';
 import QRCode from 'qrcode';
@@ -626,7 +626,27 @@ export const verifySecondFactor = async (req, res) => {
             .returning({ id: recoveryCodes.id });
          valid = Boolean(used);
       } else {
-         valid = isValidTotp(decryptSecret(user.totpSecretEncrypted), code);
+         const step = totpStep(decryptSecret(user.totpSecretEncrypted), code);
+         // Claim the step atomically so a code can sign in only once.
+         const lastStep = user.totpLastUsedStep ?? null;
+         if (step !== null && (lastStep === null || step > lastStep)) {
+            const [claimed] = await db
+               .update(users)
+               .set({ totpLastUsedStep: step })
+               .where(
+                  and(
+                     eq(users.id, user.id),
+                     or(
+                        isNull(users.totpLastUsedStep),
+                        lt(users.totpLastUsedStep, step),
+                     ),
+                  ),
+               )
+               .returning({ id: users.id });
+            valid = Boolean(claimed);
+         } else {
+            valid = false;
+         }
       }
 
       if (!valid) {
@@ -690,9 +710,11 @@ export const confirmSecondFactorSetup = async (req, res) => {
             .status(400)
             .json({ message: 'Start Second Factor setup first.' });
       }
-      if (
-         !isValidTotp(decryptSecret(user.totpSecretEncrypted), req.body?.code)
-      ) {
+      const step = totpStep(
+         decryptSecret(user.totpSecretEncrypted),
+         req.body?.code,
+      );
+      if (step === null) {
          await recordFailedAttempt(user, audit, 'second_factor_failed', {
             method: 'setup',
          });
@@ -705,6 +727,7 @@ export const confirmSecondFactorSetup = async (req, res) => {
             .update(users)
             .set({
                totpEnabledAt: new Date(),
+               totpLastUsedStep: step,
                failedLoginAttempts: 0,
                lockedUntil: null,
             })
