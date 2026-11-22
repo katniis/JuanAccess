@@ -14,7 +14,7 @@ export const BILL_MIME_TYPES = new Set([
 
 const signedUrlSeconds = 5 * 60;
 
-function getConfig() {
+export function getConfig() {
    const url = process.env.SUPABASE_URL?.trim();
    const key =
       process.env.SUPABASE_SECRET_KEY?.trim() ||
@@ -27,7 +27,7 @@ function getConfig() {
    };
 }
 
-function getClient(config) {
+export function getClient(config) {
    return createClient(config.url, config.key, {
       auth: { autoRefreshToken: false, persistSession: false },
    });

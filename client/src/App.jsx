@@ -31,6 +31,7 @@ import StaffPatientRecord from './pages/staff/StaffPatientRecord.jsx';
 import StaffSchedule from './pages/staff/StaffSchedule.jsx';
 import StaffSlotManagement from './pages/staff/StaffSlotManagement.jsx';
 import AccountRecoveryPage from './pages/AccountRecoveryPage.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import { getHomePathForRole } from './utils/authRoutes.js';
 
 function SessionRestoring() {
@@ -194,6 +195,7 @@ function App() {
                         </PublicOnly>
                      }
                   />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route
                      path="/forgot-password"
                      element={<AccountRecoveryPage mode="forgot" />}

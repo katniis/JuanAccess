@@ -18,6 +18,11 @@ import {
    users,
    visitTypes,
 } from '../db/schema/index.js';
+import { PROFESSIONS } from '../db/schema/providers.js';
+import {
+   isSupportedPhotoType,
+   storePractitionerPhoto,
+} from '../services/practitioner-photo.service.js';
 
 const clean = (value, max = 255) =>
    typeof value === 'string' && value.trim()
@@ -218,22 +223,111 @@ export async function updateAdminUser(req, res) {
    }
 }
 
-export async function updateAdminProvider(req, res) {
+const practitionerText = [
+   ['first_name', 'firstName', 100],
+   ['last_name', 'lastName', 100],
+   ['specialty', 'specialty', 100],
+   ['npi_number', 'npiNumber', 20],
+   ['education', 'education', 2000],
+   ['board_certifications', 'boardCertifications', 2000],
+   ['background', 'background', 4000],
+];
+
+// Returns { values } or { error } for a Practitioner create/update body.
+function practitionerValues(body, { creating }) {
+   const values = {};
+   for (const [key, field, maxLength] of practitionerText) {
+      if (body?.[key] !== undefined)
+         values[field] = clean(body[key], maxLength);
+   }
+   if (creating && (!values.firstName || !values.lastName))
+      return { error: 'first_name and last_name are required' };
+   if (values.firstName === null || values.lastName === null)
+      return { error: 'first_name and last_name cannot be blank' };
+   if (body?.profession !== undefined || creating) {
+      if (!PROFESSIONS.includes(body?.profession))
+         return {
+            error: `profession must be one of ${PROFESSIONS.join(', ')}`,
+         };
+      values.profession = body.profession;
+   }
+   if (body?.prc_license_number !== undefined) {
+      const license = clean(String(body.prc_license_number ?? ''), 7);
+      if (license !== null && !/^\d{7}$/.test(license))
+         return { error: 'prc_license_number must be 7 digits' };
+      values.prcLicenseNumber = license;
+   }
+   if (body?.practice_start_year !== undefined) {
+      const year = body.practice_start_year;
+      if (
+         year !== null &&
+         (!Number.isInteger(year) ||
+            year < 1950 ||
+            year > new Date().getFullYear())
+      )
+         return { error: 'practice_start_year must be a valid past year' };
+      values.practiceStartYear = year;
+   }
+   if (body?.consultation_fee !== undefined) {
+      const fee = body.consultation_fee;
+      if (
+         fee !== null &&
+         (typeof fee !== 'number' ||
+            !Number.isFinite(fee) ||
+            fee < 0 ||
+            fee > 99999999 ||
+            Math.round(fee * 100) !== fee * 100)
+      )
+         return {
+            error: 'consultation_fee must be a non-negative amount in PHP',
+         };
+      values.consultationFee = fee === null ? null : fee.toFixed(2);
+   }
+   if (body?.is_active !== undefined) values.isActive = Boolean(body.is_active);
+   return { values };
+}
+
+export async function listAdminPractitioners(_req, res) {
+   try {
+      return res.json({
+         practitioners: await db
+            .select()
+            .from(providers)
+            .orderBy(asc(providers.lastName)),
+      });
+   } catch (error) {
+      console.error('Failed to list practitioners:', error);
+      return res.status(500).json({ error: 'Failed to list practitioners' });
+   }
+}
+
+export async function createAdminPractitioner(req, res) {
+   const { values, error } = practitionerValues(req.body, { creating: true });
+   if (error) return res.status(400).json({ error });
+   try {
+      const [created] = await db.insert(providers).values(values).returning();
+      void recordAudit({
+         entityType: 'practitioner',
+         entityId: created.id,
+         action: 'admin_create',
+         changedBy: req.user.id,
+         newValue: values,
+      });
+      return res.status(201).json(created);
+   } catch (err) {
+      console.error('Failed to create practitioner:', err);
+      return res.status(500).json({ error: 'Failed to create practitioner' });
+   }
+}
+
+export async function updateAdminPractitioner(req, res) {
    const id = Number(req.params.id);
    if (!Number.isInteger(id) || id < 1)
-      return res.status(400).json({ error: 'Invalid provider ID' });
-   const updates = {};
-   for (const [key, field, maxLength] of [
-      ['first_name', 'firstName', 100],
-      ['last_name', 'lastName', 100],
-      ['specialty', 'specialty', 100],
-      ['npi_number', 'npiNumber', 20],
-   ]) {
-      if (req.body?.[key] !== undefined)
-         updates[field] = clean(req.body[key], maxLength);
-   }
-   if (req.body?.is_active !== undefined)
-      updates.isActive = Boolean(req.body.is_active);
+      return res.status(400).json({ error: 'Invalid practitioner ID' });
+   const { values: updates, error } = practitionerValues(req.body, {
+      creating: false,
+   });
+   if (error) return res.status(400).json({ error });
    if (!Object.keys(updates).length)
       return res.status(400).json({ error: 'No supported updates supplied' });
    try {
@@ -244,7 +338,7 @@ export async function updateAdminProvider(req, res) {
          .returning();
       if (updated)
          void recordAudit({
-            entityType: 'provider',
+            entityType: 'practitioner',
             entityId: id,
             action: 'admin_update',
             changedBy: req.user.id,
@@ -252,10 +346,43 @@ export async function updateAdminProvider(req, res) {
          });
       return updated
          ? res.json(updated)
-         : res.status(404).json({ error: 'Provider not found' });
+         : res.status(404).json({ error: 'Practitioner not found' });
+   } catch (err) {
+      console.error('Failed to update practitioner:', err);
+      return res.status(500).json({ error: 'Failed to update practitioner' });
+   }
+}
+
+export async function uploadAdminPractitionerPhoto(req, res) {
+   const id = Number(req.params.id);
+   if (!Number.isInteger(id) || id < 1)
+      return res.status(400).json({ error: 'Invalid practitioner ID' });
+   if (!req.file?.buffer?.length || !isSupportedPhotoType(req.file.mimetype))
+      return res
+         .status(400)
+         .json({ error: 'A PNG, JPEG, or WebP photo is required' });
+   try {
+      const photoUrl = await storePractitionerPhoto({
+         practitionerId: id,
+         file: req.file,
+      });
+      const [updated] = await db
+         .update(providers)
+         .set({ photoUrl })
+         .where(eq(providers.id, id))
+         .returning();
+      if (!updated)
+         return res.status(404).json({ error: 'Practitioner not found' });
+      void recordAudit({
+         entityType: 'practitioner',
+         entityId: id,
+         action: 'admin_photo_update',
+         changedBy: req.user.id,
+      });
+      return res.json(updated);
    } catch (error) {
-      console.error('Failed to update provider:', error);
-      return res.status(500).json({ error: 'Failed to update provider' });
+      console.error('Failed to upload practitioner photo:', error);
+      return res.status(500).json({ error: 'Failed to upload photo' });
    }
 }
 
