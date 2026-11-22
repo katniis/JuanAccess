@@ -290,4 +290,31 @@ describe('account settings', () => {
       });
       expect(oldSession.status).toBe(401);
    });
+
+   it('keeps a staff session at 12 hours after a password change', async () => {
+      const staff = { ...patient, role: 'staff', patientId: null };
+      const staffToken = jwt.sign({ id: staff.id, authVersion: 0 }, secret);
+      mockQueryQueue.push(
+         [{ ...staff, authVersion: 0 }],
+         [{ passwordHash, authVersion: 0 }],
+         [{ authVersion: 1 }],
+      );
+      const res = await fetch(`${ctx.baseUrl}/auth/password`, {
+         method: 'PATCH',
+         headers: {
+            cookie: `token=${staffToken}`,
+            'content-type': 'application/json',
+         },
+         body: JSON.stringify({
+            currentPassword: 'current-password',
+            newPassword: 'replacement-password',
+         }),
+      });
+
+      expect(res.status).toBe(200);
+      const setCookie = res.headers.get('set-cookie');
+      expect(setCookie).toMatch(/max-age=43200/i);
+      const issued = jwt.decode(setCookie.match(/token=([^;]+)/)[1]);
+      expect(issued.exp - issued.iat).toBe(12 * 60 * 60);
+   });
 });
