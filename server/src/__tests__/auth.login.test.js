@@ -224,19 +224,18 @@ describe('POST /auth/login', () => {
       );
    });
 
-   it('gives staff a 12-hour session and a new-login notification', async () => {
-      mockQueryQueue.push(
-         [
-            {
-               ...userRow,
-               id: 7,
-               email: 'staff@example.com',
-               role: 'staff',
-               patientId: null,
-            },
-         ],
-         [{ id: 99 }],
-      );
+   // The staff 12-hour session and new-login notification are issued after the
+   // Second Factor; see auth.second-factor.test.js.
+   it('gives staff no session from the password alone', async () => {
+      mockQueryQueue.push([
+         {
+            ...userRow,
+            id: 7,
+            email: 'staff@example.com',
+            role: 'staff',
+            patientId: null,
+         },
+      ]);
 
       const res = await postJson(ctx.baseUrl, '/auth/login', {
          email: 'staff@example.com',
@@ -244,14 +243,9 @@ describe('POST /auth/login', () => {
       });
 
       expect(res.status).toBe(200);
-      const { iat, exp } = jwt.decode(getCookie(res, 'token'));
-      expect(exp - iat).toBe(12 * 60 * 60);
-      expect(res.headers.get('set-cookie')).toMatch(/max-age=43200/i);
-      expect(mockMutationLog).toContainEqual({
-         values: expect.objectContaining({ userId: 7, type: 'new_login' }),
-      });
-      expect(mockRecordAudit).toHaveBeenCalledWith(
-         expect.objectContaining({ entityId: 7, action: 'login_success' }),
+      expect(getCookie(res, 'token')).toBeNull();
+      expect(mockRecordAudit).not.toHaveBeenCalledWith(
+         expect.objectContaining({ action: 'login_success' }),
       );
    });
 });

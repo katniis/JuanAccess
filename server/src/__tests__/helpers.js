@@ -5,6 +5,7 @@ process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.DATABASE_URL ??= 'postgres://localhost:5432/test_db';
 process.env.NODE_ENV = 'test';
 process.env.CLIENT_ORIGIN ??= 'http://localhost:5173';
+process.env.TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 
 export const mockQueryQueue = [];
 export const mockSendEmail = jest.fn().mockResolvedValue({ id: 'email-test' });

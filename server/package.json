@@ -31,7 +31,9 @@
       "jest": "^30.5.2",
       "jsonwebtoken": "^9.0.3",
       "multer": "^2.4.0",
+      "otpauth": "^9.6.0",
       "postgres": "^3.4.9",
+      "qrcode": "^1.5.4",
       "resend": "^6.37.0"
    },
    "devDependencies": {

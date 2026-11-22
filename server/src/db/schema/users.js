@@ -5,6 +5,7 @@ import {
    varchar,
    integer,
    timestamp,
+   text,
    check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -52,6 +53,11 @@ export const users = pgTable(
          .default(0),
 
       lockedUntil: timestamp('locked_until', { withTimezone: true }),
+
+      // Encrypted with TOTP_ENCRYPTION_KEY; active only once totpEnabledAt is set.
+      totpSecretEncrypted: text('totp_secret_encrypted'),
+
+      totpEnabledAt: timestamp('totp_enabled_at', { withTimezone: true }),
 
       createdAt: timestamp('created_at', {
          withTimezone: true,

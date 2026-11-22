@@ -5316,6 +5316,29 @@ dialog::-webkit-scrollbar,
    display: grid;
    gap: 17px;
 }
+.auth-form[hidden] {
+   display: none;
+}
+.auth-second-factor-qr {
+   display: grid;
+   justify-items: center;
+   gap: 8px;
+   color: #71869b;
+   font-size: var(--type-small);
+   text-align: center;
+   overflow-wrap: anywhere;
+}
+.auth-recovery-codes {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 8px;
+   margin: 0;
+   padding: 0;
+   list-style: none;
+}
+.auth-recovery-codes code {
+   font-size: var(--type-small);
+}
 .auth-name-fields {
    display: grid;
    grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -11,6 +11,7 @@ import {
    EMAIL_UNAVAILABLE_MESSAGE,
 } from '../utils/emailFeatures.js';
 import { getHomePathForRole } from '../utils/authRoutes.js';
+import SecondFactorStep from '../components/SecondFactorStep.jsx';
 
 function PasswordField({ id, label, value, onChange, autoComplete }) {
    const [visible, setVisible] = useState(false);
@@ -45,7 +46,9 @@ function AuthPage({ mode = 'signin' }) {
    const navigate = useNavigate();
    const location = useLocation();
    const [searchParams] = useSearchParams();
-   const { signIn, registerPatient, acceptStaffInvitation } = useAuth();
+   const { signIn, registerPatient, acceptStaffInvitation, refreshUser } =
+      useAuth();
+   const [secondFactorStep, setSecondFactorStep] = useState(null);
    const [email, setEmail] = useState('');
    const [firstName, setFirstName] = useState('');
    const [lastName, setLastName] = useState('');
@@ -84,6 +87,23 @@ function AuthPage({ mode = 'signin' }) {
          ...current,
          [field]: event.target.value,
       }));
+   };
+
+   const goToPortal = (user) => {
+      const homePath = getHomePathForRole(user.role);
+      const requestedPath = location.state?.from?.pathname;
+      const canReturnToRequestedPage =
+         user.role === 'patient'
+            ? requestedPath?.startsWith('/patient')
+            : requestedPath?.startsWith('/staff');
+      navigate(canReturnToRequestedPage ? requestedPath : homePath, {
+         replace: true,
+      });
+   };
+
+   const completeSecondFactor = async (user) => {
+      await refreshUser();
+      goToPortal(user);
    };
 
    const submit = async (event) => {
@@ -153,18 +173,15 @@ function AuthPage({ mode = 'signin' }) {
                password,
             });
          } else {
-            user = await signIn({ email, password, rememberMe });
+            const result = await signIn({ email, password, rememberMe });
+            if (result.secondFactor) {
+               setSecondFactorStep(result.secondFactor);
+               return;
+            }
+            user = result.user;
          }
 
-         const homePath = getHomePathForRole(user.role);
-         const requestedPath = location.state?.from?.pathname;
-         const canReturnToRequestedPage =
-            user.role === 'patient'
-               ? requestedPath?.startsWith('/patient')
-               : requestedPath?.startsWith('/staff');
-         navigate(canReturnToRequestedPage ? requestedPath : homePath, {
-            replace: true,
-         });
+         goToPortal(user);
       } catch (submitError) {
          setError(
             submitError.message ||
@@ -175,22 +192,29 @@ function AuthPage({ mode = 'signin' }) {
       }
    };
 
-   const title = isSignup
-      ? ['Create your account', 'Your details', 'Insurance coverage'][
-           signupStep - 1
-        ]
-      : isInvitation
-        ? 'Set up your staff account'
-        : 'Welcome back';
-   const subtitle = isSignup
-      ? [
-           'Set up your patient account.',
-           'Add a few optional details to your profile.',
-           'Add insurance now or leave it for later.',
-        ][signupStep - 1]
-      : isInvitation
-        ? 'Choose a password to accept your staff invitation.'
-        : 'Sign in to continue to JuanAccess.';
+   const title =
+      secondFactorStep === 'setup_required'
+         ? 'Set up your Second Factor'
+         : secondFactorStep
+           ? 'Enter your code'
+           : isSignup
+             ? ['Create your account', 'Your details', 'Insurance coverage'][
+                  signupStep - 1
+               ]
+             : isInvitation
+               ? 'Set up your staff account'
+               : 'Welcome back';
+   const subtitle = secondFactorStep
+      ? 'Staff accounts need a code from your authenticator app to sign in.'
+      : isSignup
+        ? [
+             'Set up your patient account.',
+             'Add a few optional details to your profile.',
+             'Add insurance now or leave it for later.',
+          ][signupStep - 1]
+        : isInvitation
+          ? 'Choose a password to accept your staff invitation.'
+          : 'Sign in to continue to JuanAccess.';
 
    return (
       <main className="auth-page">
@@ -237,10 +261,23 @@ function AuthPage({ mode = 'signin' }) {
                   </ol>
                )}
 
+               {secondFactorStep && (
+                  <SecondFactorStep
+                     mode={secondFactorStep}
+                     onComplete={completeSecondFactor}
+                     onCancel={() => {
+                        setSecondFactorStep(null);
+                        setPassword('');
+                        setError('');
+                     }}
+                  />
+               )}
+
                <form
                   className="auth-form"
                   onSubmit={submit}
-                  aria-busy={isSubmitting}>
+                  aria-busy={isSubmitting}
+                  hidden={Boolean(secondFactorStep)}>
                   {isSignup && signupStep === 1 && (
                      <>
                         <div className="auth-name-fields">
