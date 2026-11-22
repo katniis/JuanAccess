@@ -33,8 +33,9 @@ import {
    listFeeSchedule,
    recordProcedure,
 } from '../services/billing.service.js';
-import { manilaDateBounds } from '../utils/timezone.js';
+import { manilaDateBounds, manilaDateString } from '../utils/timezone.js';
 import { parseCancellationReason } from '../utils/cancellationReasons.js';
+import { getCancellationReport } from '../services/cancellation-report.service.js';
 import {
    isOnDuty,
    listDutyOverrides,
@@ -125,6 +126,54 @@ export const getPractitionerDutyOverrides = async (req, res) => {
    } catch (error) {
       console.error('Failed to list duty overrides:', error);
       return res.status(500).json({ error: 'Failed to list duty overrides' });
+   }
+};
+
+const parseManilaDay = (value) => {
+   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+   const bounds = manilaDateBounds(value);
+   // Rejects impossible dates like 2026-13-40 that Date.UTC would roll over.
+   return manilaDateString(bounds.startOfDay) === value ? bounds : null;
+};
+
+const parseOptionalId = (value) => {
+   if (value === undefined || value === '') return { id: undefined };
+   const id = Number(value);
+   return Number.isInteger(id) && id > 0 ? { id } : { error: true };
+};
+
+export const getCancellationReportHandler = async (req, res) => {
+   const { from, to, visitTypeId, practitionerId } = req.query;
+   const fromDay = from ? parseManilaDay(from) : undefined;
+   const toDay = to ? parseManilaDay(to) : undefined;
+   if (fromDay === null || toDay === null) {
+      return res.status(400).json({ error: 'Dates must be YYYY-MM-DD' });
+   }
+   if (fromDay && toDay && fromDay.startOfDay > toDay.startOfDay) {
+      return res.status(400).json({ error: 'Start date is after end date' });
+   }
+   const visitType = parseOptionalId(visitTypeId);
+   const practitioner = parseOptionalId(practitionerId);
+   if (visitType.error || practitioner.error) {
+      return res
+         .status(400)
+         .json({ error: 'Invalid visit type or practitioner' });
+   }
+
+   const filters = {
+      from: fromDay?.startOfDay,
+      to: toDay?.endOfDay,
+      visitTypeId: visitType.id,
+      practitionerId: practitioner.id,
+   };
+   try {
+      const report = await getCancellationReport(filters);
+      return res.json({ filters, ...report });
+   } catch (error) {
+      console.error('Failed to build cancellation report:', error);
+      return res
+         .status(500)
+         .json({ error: 'Failed to build cancellation report' });
    }
 };
 
