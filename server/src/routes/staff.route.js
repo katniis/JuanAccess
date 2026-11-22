@@ -18,6 +18,8 @@ import {
    getGuidelines,
    getPatientDetails,
    getPatients,
+   getPractitionerDutyOverrides,
+   getPractitionerOnDuty,
    getPriorAuthDetail,
    getPriorAuthQueue,
    getSlotsUtilization,
@@ -54,6 +56,8 @@ router.use(requireStaff);
 router.get('/dashboard', getDashboard);
 router.get('/doctors', getDoctors);
 router.get('/doctors/:id/schedule', getDoctorScheduleHandler);
+router.get('/practitioners/:id/on-duty', getPractitionerOnDuty);
+router.get('/practitioners/:id/duty-overrides', getPractitionerDutyOverrides);
 router.get('/patients', getPatients);
 router.get('/patients/:id', getPatientDetails);
 router.get('/appointments/:id/pre-visit-data', getAppointmentPreVisitData);

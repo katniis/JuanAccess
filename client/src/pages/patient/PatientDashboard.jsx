@@ -122,12 +122,12 @@ function PatientDashboard() {
       }
    };
 
-   const cancelUpcomingAppointment = async () => {
+   const cancelUpcomingAppointment = async (cancellation) => {
       const appointment = appointmentToCancel;
       if (!appointment) return;
       setBusyAction('cancel');
       try {
-         await cancelPatientAppointment(appointment.id);
+         await cancelPatientAppointment(appointment.id, cancellation);
          await refreshDashboard();
          notify({ type: 'success', message: 'Appointment cancelled.' });
       } catch (error) {
@@ -232,7 +232,9 @@ function PatientDashboard() {
             appointment={appointmentToCancel}
             busy={busyAction === 'cancel'}
             onCancel={() => setAppointmentToCancel(null)}
-            onConfirm={() => void cancelUpcomingAppointment()}
+            onConfirm={(cancellation) =>
+               void cancelUpcomingAppointment(cancellation)
+            }
          />
          <section className="welcome-row">
             <div className="dashboard-welcome-banner">

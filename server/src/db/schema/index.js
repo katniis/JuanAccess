@@ -1,6 +1,7 @@
 export { equipment } from './equipments.js';
 export { patients } from './patients.js';
 export { providerAvailability } from './providerAvailability.js';
+export { dutyScheduleOverrides } from './dutyScheduleOverrides.js';
 export { providers } from './providers.js';
 export { rooms } from './rooms.js';
 export { users } from './users.js';

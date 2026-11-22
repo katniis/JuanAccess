@@ -19,6 +19,14 @@ import { generatePriorAuthDraft } from '../services/prior-auth-draft.service.js'
 
 const APPOINTMENT_GRACE_MINUTES = 15;
 const APPOINTMENT_GRACE_MS = APPOINTMENT_GRACE_MINUTES * 60 * 1000;
+const PATIENT_CANCELLATION_REASONS = [
+   'schedule_conflict',
+   'feeling_better',
+   'cost',
+   'found_another_clinic',
+   'transport',
+   'other',
+];
 
 export const getAllVisitTypes = async (req, res) => {
    try {
@@ -509,7 +517,23 @@ export const cancelAppointment = async (req, res) => {
    if (req.user?.role === 'patient' && !req.user.patientId) {
       return res.status(403).json({ error: 'Patient account is not linked' });
    }
+   const { reason, reasonText } = req.body ?? {};
+   const trimmedText =
+      typeof reasonText === 'string' ? reasonText.trim().slice(0, 1000) : '';
+   if (req.user?.role === 'patient') {
+      if (!PATIENT_CANCELLATION_REASONS.includes(reason)) {
+         return res
+            .status(400)
+            .json({ error: 'A valid cancellation reason is required' });
+      }
+      if (reason === 'other' && !trimmedText) {
+         return res
+            .status(400)
+            .json({ error: 'Please describe your reason for cancelling' });
+      }
+   }
    try {
+      const now = new Date();
       const cancelled = await db.transaction(
          async (tx) => {
             const conditions = [
@@ -529,7 +553,16 @@ export const cancelAppointment = async (req, res) => {
             }
             const [updated] = await tx
                .update(appointments)
-               .set({ status: 'cancelled', updatedAt: new Date() })
+               .set({
+                  status: 'cancelled',
+                  // shortcut: non-patient callers are not validated here; staff reasons land in #11
+                  cancellationReason:
+                     typeof reason === 'string' ? reason.slice(0, 40) : null,
+                  cancellationReasonText: trimmedText || null,
+                  cancelledByUserId: req.user.id,
+                  cancelledAt: now,
+                  updatedAt: now,
+               })
                .where(and(...conditions))
                .returning({ id: appointments.id });
             if (!updated) {
