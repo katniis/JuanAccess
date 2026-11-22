@@ -8029,3 +8029,27 @@ dialog::-webkit-scrollbar,
       padding: 16px 17px;
    }
 }
+.privacy-policy {
+   min-height: 100vh;
+   padding: 24px 16px 48px;
+   background: #f6f9fc;
+   color: #102d4c;
+}
+.privacy-policy article {
+   max-width: 720px;
+   margin: 24px auto 0;
+   line-height: 1.6;
+}
+.privacy-policy h2 {
+   margin-top: 28px;
+   font-size: var(--type-heading-small);
+}
+.privacy-policy-version {
+   color: #58728e;
+}
+.privacy-policy-draft {
+   padding: 12px 16px;
+   border: 1px solid #f2d39b;
+   border-radius: 12px;
+   background: #fff4df;
+}

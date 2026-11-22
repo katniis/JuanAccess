@@ -10,6 +10,8 @@ import { userInvitations } from '../db/schema/userInvitations.js';
 import { patientCoverage } from '../db/schema/patientCoverage.js';
 import { accountActionTokens } from '../db/schema/accountActionTokens.js';
 import { notifications } from '../db/schema/notifications.js';
+import { consentRecords } from '../db/schema/consentRecords.js';
+import { PRIVACY_POLICY_VERSION } from '../utils/privacyPolicy.js';
 import { findOrCreateInsurancePlan } from '../services/insurance.service.js';
 import {
    isEmailDeliveryEnabled,
@@ -77,10 +79,16 @@ export const patientRegister = async (req, res) => {
          member_id: memberId,
          coverage_start: coverageStart,
          coverage_end: coverageEnd,
+         privacy_consent: privacyConsent,
       } = req.body ?? {};
 
       if (!email || !password || !firstName || !lastName || !dateOfBirth) {
          return res.status(400).json({ message: 'Missing required fields.' });
+      }
+      if (privacyConsent !== true) {
+         return res.status(400).json({
+            message: 'You must accept the Privacy Policy to register.',
+         });
       }
       if (!isValidDate(dateOfBirth)) {
          return res.status(400).json({ message: 'Invalid date of birth.' });
@@ -164,6 +172,10 @@ export const patientRegister = async (req, res) => {
                displayName: users.displayName,
             });
 
+         await tx
+            .insert(consentRecords)
+            .values({ userId: user.id, policyVersion: PRIVACY_POLICY_VERSION });
+
          return { patient, user };
       });
 
@@ -175,6 +187,50 @@ export const patientRegister = async (req, res) => {
       });
    } catch (error) {
       console.error('Patient registration failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+const consentStatus = (required) => ({
+   required,
+   currentVersion: PRIVACY_POLICY_VERSION,
+});
+
+// Only patients give Privacy Policy consent; staff get the plain user.
+export const getMe = async (req, res) => {
+   if (req.user.role !== 'patient') return res.json({ user: req.user });
+   try {
+      const [record] = await db
+         .select({ id: consentRecords.id })
+         .from(consentRecords)
+         .where(
+            and(
+               eq(consentRecords.userId, req.user.id),
+               eq(consentRecords.policyVersion, PRIVACY_POLICY_VERSION),
+            ),
+         )
+         .limit(1);
+      return res.json({ user: req.user, consent: consentStatus(!record) });
+   } catch (error) {
+      console.error('Consent lookup failed:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
+   }
+};
+
+export const acceptPrivacyPolicy = async (req, res) => {
+   if (req.user.role !== 'patient') {
+      return res
+         .status(403)
+         .json({ message: 'Only patients give Privacy Policy consent.' });
+   }
+   try {
+      await db.insert(consentRecords).values({
+         userId: req.user.id,
+         policyVersion: PRIVACY_POLICY_VERSION,
+      });
+      return res.status(201).json({ consent: consentStatus(false) });
+   } catch (error) {
+      console.error('Consent recording failed:', error);
       return res.status(500).json({ message: 'Internal server error.' });
    }
 };

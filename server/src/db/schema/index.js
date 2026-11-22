@@ -27,3 +27,4 @@ export { preVisitSummaries } from './preVisitSummaries.js';
 export { bills } from './bills.js';
 export { billLineItems } from './billLineItems.js';
 export { disputeLetters } from './disputeLetters.js';
+export { consentRecords } from './consentRecords.js';
