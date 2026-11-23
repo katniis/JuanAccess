@@ -17,7 +17,7 @@ The kind of Practitioner — physician, nurse, medical technologist, radiologic 
 _Avoid_: Role (role means portal access level), specialty (a physician's field)
 
 **Duty Schedule**:
-The weekly recurring hours a Practitioner works, adjusted by date-specific overrides for leave or swaps.
+The weekly recurring hours a Practitioner works.
 _Avoid_: Availability, roster
 
 ## Patients
