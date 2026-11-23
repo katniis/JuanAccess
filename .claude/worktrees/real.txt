@@ -1,0 +1,5 @@
+server/src/__tests__/auth.me.test.js
+server/src/__tests__/auth.register.test.js
+server/src/controller/auth.controller.js
+server/src/db/schema/index.js
+server/src/routes/auth.route.js
