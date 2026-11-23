@@ -21,27 +21,6 @@ export async function getProviderSchedule(
    return schedule;
 }
 
-export async function getDutyOverrides(practitionerId) {
-   const { overrides = [] } = await staffRequest(
-      `/staff/practitioners/${encodeURIComponent(practitionerId)}/duty-overrides`,
-   );
-   return overrides;
-}
-
-export function createDutyOverride(override) {
-   return staffRequest('/staff/admin/reference/duty-overrides', {
-      method: 'POST',
-      body: override,
-   });
-}
-
-export function deleteDutyOverride(id) {
-   return staffRequest(
-      `/staff/admin/reference/duty-overrides/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-   );
-}
-
 export async function getAppointmentPreVisitData(appointmentId) {
    return staffRequest(
       `/staff/appointments/${encodeURIComponent(appointmentId)}/pre-visit-data`,

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
-import DutyOverrides from './DutyOverrides.jsx';
+import { useSearchParams } from 'react-router-dom';
 import AppointmentCancelDialog from '../../components/AppointmentCancelDialog.jsx';
 import ErrorState from '../../components/ErrorState.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -290,7 +289,6 @@ function AppointmentDrawer({
 }
 
 function StaffSchedule() {
-   const { role } = useOutletContext();
    const [searchParams, setSearchParams] = useSearchParams();
    const [requestedProviderId] = useState(
       () => Number(searchParams.get('provider')) || null,
@@ -633,13 +631,6 @@ function StaffSchedule() {
                   ))}
                </div>
             </section>
-         )}
-         {role === 'staff_admin' && (
-            <DutyOverrides
-               key={selectedProvider.id}
-               practitioner={selectedProvider}
-               defaultDate={selectedDate}
-            />
          )}
          {selectedAppointment && (
             <AppointmentDrawer

@@ -37,10 +37,6 @@ import { manilaDateBounds, manilaDateString } from '../utils/timezone.js';
 import { parseCancellationReason } from '../utils/cancellationReasons.js';
 import { parseCancellationLetter } from '../services/cancellation-letter.service.js';
 import { getCancellationReport } from '../services/cancellation-report.service.js';
-import {
-   isOnDuty,
-   listDutyOverrides,
-} from '../services/duty-schedule.service.js';
 import { generateGeminiDraft } from '../services/gemini.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { notifyPatient } from '../services/notification.service.js';
@@ -93,40 +89,6 @@ export const getDoctorScheduleHandler = async (req, res) => {
    } catch (error) {
       console.error('Failed to fetch doctor schedule:', error);
       return res.status(500).json({ error: 'Failed to fetch doctor schedule' });
-   }
-};
-
-export const getPractitionerOnDuty = async (req, res) => {
-   const practitionerId = Number(req.params.id);
-   const at = new Date(req.query.at);
-   if (
-      !Number.isInteger(practitionerId) ||
-      practitionerId < 1 ||
-      !req.query.at ||
-      Number.isNaN(at.getTime())
-   ) {
-      return res
-         .status(400)
-         .json({ error: 'A valid practitioner ID and at time are required' });
-   }
-   try {
-      return res.json({ onDuty: await isOnDuty(practitionerId, at) });
-   } catch (error) {
-      console.error('Failed to check duty schedule:', error);
-      return res.status(500).json({ error: 'Failed to check duty schedule' });
-   }
-};
-
-export const getPractitionerDutyOverrides = async (req, res) => {
-   const practitionerId = Number(req.params.id);
-   if (!Number.isInteger(practitionerId) || practitionerId < 1) {
-      return res.status(400).json({ error: 'Invalid practitioner ID' });
-   }
-   try {
-      return res.json({ overrides: await listDutyOverrides(practitionerId) });
-   } catch (error) {
-      console.error('Failed to list duty overrides:', error);
-      return res.status(500).json({ error: 'Failed to list duty overrides' });
    }
 };
 
